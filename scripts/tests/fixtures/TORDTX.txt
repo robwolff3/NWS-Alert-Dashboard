@@ -1,0 +1,62 @@
+
+019 
+WFUS53 KDTX 110036
+TORDTX
+MIC017-157-110115-
+/O.NEW.KDTX.TO.W.0017.260611T0036Z-260611T0115Z/
+
+BULLETIN - EAS ACTIVATION REQUESTED
+Tornado Warning
+National Weather Service Detroit/Pontiac MI
+836 PM EDT Wed Jun 10 2026
+
+The National Weather Service in Detroit/Pontiac has issued a
+
+* Tornado Warning for...
+  Northwestern Tuscola County in southeastern Michigan...
+  Southeastern Bay County in southeastern Michigan...
+
+* Until 915 PM EDT.
+
+* At 836 PM EDT, a severe thunderstorm capable of producing a tornado
+  was located over Munger, or near Reese, moving east at 35 mph.
+
+  HAZARD...Tornado and half dollar size hail.
+
+  SOURCE...Radar indicated rotation.
+
+  IMPACT...Flying debris will be dangerous to those caught without 
+           shelter. Mobile homes will be damaged or destroyed. 
+           Damage to roofs, windows, and vehicles will occur.  Tree 
+           damage is likely.
+
+* This dangerous storm will be near...
+  Reese, Fairgrove, and Quanicassee around 840 PM EDT.
+  Akron around 845 PM EDT.
+  Caro and Unionville around 855 PM EDT.
+
+Other locations impacted by this tornadic thunderstorm include
+Wisner, Gilford, Colling, and Colwood.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+TAKE COVER NOW! Move to a basement or an interior room on the lowest
+floor of a sturdy building. Avoid windows. If you are outdoors, in a
+mobile home, or in a vehicle, move to the closest substantial shelter
+and protect yourself from flying debris.
+
+&&
+
+LAT...LON 4367 8335 4346 8335 4346 8370 4348 8370
+      4348 8382 4352 8382 4352 8383 4357 8383
+      4365 8359
+TIME...MOT...LOC 0036Z 251DEG 28KT 4350 8374 
+
+TORNADO...RADAR INDICATED
+MAX HAIL SIZE...1.25 IN
+
+$$
+
+MV
+
+

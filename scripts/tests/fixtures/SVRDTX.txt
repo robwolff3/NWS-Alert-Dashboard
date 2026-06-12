@@ -1,0 +1,65 @@
+
+106 
+WUUS53 KDTX 120410
+SVRDTX
+MIC161-120515-
+/O.NEW.KDTX.SV.W.0070.260612T0410Z-260612T0515Z/
+
+BULLETIN - IMMEDIATE BROADCAST REQUESTED
+Severe Thunderstorm Warning
+National Weather Service Detroit/Pontiac MI
+1210 AM EDT Fri Jun 12 2026
+
+The National Weather Service in Detroit/Pontiac has issued a
+
+* Severe Thunderstorm Warning for...
+  Washtenaw County in southeastern Michigan...
+
+* Until 115 AM EDT.
+
+* At 1210 AM EDT, severe thunderstorms were located along a line
+  extending from near Brooklyn to near Clayton to near Archbold,
+  moving east at 55 mph.
+
+  HAZARD...60 mph wind gusts and penny size hail.
+
+  SOURCE...Radar indicated.
+
+  IMPACT...Expect damage to roofs, siding, and trees.
+
+* Severe thunderstorms will be near...
+  Manchester around 1215 AM EDT.
+  Ann Arbor and Saline around 1230 AM EDT.
+  Ypsilanti and Milan around 1235 AM EDT.
+  Willis around 1245 AM EDT.
+
+Other locations impacted by these severe thunderstorms include Hudson
+Mills, Pittsfield Township, Whittaker, Lyndon Township, Hudson Mills
+Metropark, Bridgewater, Delhi Mills, Pleasant Lake, Barton Hills, and
+Pinckney State Recreation Area.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+Remain alert for a possible tornado! Tornadoes can develop quickly
+from severe thunderstorms. If you spot a tornado go at once into the
+basement or small central room in a sturdy structure.
+
+A Tornado Watch remains in effect until 200 AM EDT for southeastern
+Michigan.
+
+&&
+
+LAT...LON 4242 8413 4244 8355 4209 8354 4208 8413
+TIME...MOT...LOC 0410Z 257DEG 48KT 4216 8420 4183 8424 4153 8434 
+
+TORNADO...POSSIBLE
+HAIL THREAT...RADAR INDICATED
+MAX HAIL SIZE...0.75 IN
+WIND THREAT...RADAR INDICATED
+MAX WIND GUST...60 MPH
+
+$$
+
+BT
+
+

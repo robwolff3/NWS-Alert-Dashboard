@@ -1,0 +1,14 @@
+services:
+  weatherradio:
+    build: .
+    container_name: weatherradio
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./recordings:/recordings
+      - ./alerts:/alerts
+    # RTL-SDR users: add the device mapping in compose.override.yaml
+    # (see compose.override.example.yaml), or run with RADIO_ENABLED=false
+    # for an internet-only (NWWS-OI + REST API) deployment.

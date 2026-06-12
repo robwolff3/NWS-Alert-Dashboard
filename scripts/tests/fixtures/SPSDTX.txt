@@ -1,0 +1,64 @@
+
+907 
+WWUS83 KDTX 120518
+SPSDTX
+
+Special Weather Statement
+National Weather Service Detroit/Pontiac MI
+118 AM EDT Fri Jun 12 2026
+ 
+MIZ063-070-120615-
+Macomb MI-St. Clair MI-
+118 AM EDT Fri Jun 12 2026
+
+...STRONG THUNDERSTORMS WILL IMPACT MACOMB AND ST. CLAIR COUNTIES
+THROUGH 215 AM EDT...
+
+At 118 AM EDT, Doppler radar was tracking strong thunderstorms along 
+a line extending from near Almont to near Clinton Township to near 
+Grosse Ile. Movement was east at 50 mph.
+
+HAZARD...Wind gusts around 50 mph.
+
+SOURCE...Radar indicated.
+
+IMPACT...Gusty winds could knock down tree limbs and blow around 
+         unsecured objects.
+
+Strong thunderstorms will be near...
+  St. Clair Shores, Mount Clemens, New Baltimore, Richmond, Grosse 
+  Pointe, Capac, Clinton Township, and Armada around 125 AM EDT.
+  Memphis and Emmett around 130 AM EDT.
+  Harsens Island around 135 AM EDT.
+  Algonac around 140 AM EDT.
+  St. Clair, Marysville, and Marine City around 145 AM EDT.
+  Port Huron and Lakeport around 150 AM EDT.
+
+Other locations impacted by these storms include Anchorville, North
+Street, Roseville, Shelby Township, Lynn Township, Ray Center,
+Brockway, Utica, Washington, and Fort Gratiot.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+If outdoors, consider seeking shelter inside a building. 
+
+A Tornado Watch remains in effect until 200 AM EDT for southeastern
+Michigan.
+
+&&
+
+LAT...LON 4296 8242 4289 8247 4276 8247 4261 8252
+      4255 8259 4250 8270 4254 8276 4254 8281
+      4236 8288 4231 8307 4236 8293 4245 8287
+      4246 8309 4287 8310 4289 8310 4289 8299
+      4315 8300 4317 8250 4320 8247 4306 8242
+TIME...MOT...LOC 0517Z 253DEG 43KT 4296 8304 4252 8295 4213 8304 
+
+MAX HAIL SIZE...0.00 IN
+MAX WIND GUST...50 MPH
+
+$$
+
+BT
+
+

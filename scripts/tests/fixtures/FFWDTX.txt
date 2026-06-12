@@ -1,0 +1,56 @@
+
+660 
+WGUS53 KDTX 240950
+FFWDTX
+MIC161-241300-
+/O.NEW.KDTX.FF.W.0010.250924T0950Z-250924T1300Z/
+/00000.0.ER.000000T0000Z.000000T0000Z.000000T0000Z.OO/
+
+BULLETIN - EAS ACTIVATION REQUESTED
+Flash Flood Warning
+National Weather Service Detroit/Pontiac MI
+550 AM EDT Wed Sep 24 2025
+
+The National Weather Service in Detroit/Pontiac has issued a
+
+* Flash Flood Warning for...
+  Southeastern Washtenaw County in southeastern Michigan...
+
+* Until 900 AM EDT.
+
+* At 550 AM EDT, Doppler radar indicated thunderstorms producing 
+  heavy rain across the warned area. Between 1 and 4 inches of rain 
+  have fallen. Flash flooding is ongoing or expected to begin 
+  shortly.
+
+  HAZARD...Flash flooding caused by thunderstorms.
+
+  SOURCE...Radar.
+
+  IMPACT...Flash flooding of small creeks and streams, urban
+           areas, highways, streets and underpasses as well as
+           other poor drainage and low-lying areas.
+
+* Some locations that will experience flash flooding include...
+  Milan, Willis and Whittaker.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+Turn around, don't drown when encountering flooded roads. Most flood 
+deaths occur in vehicles.
+
+Please report observed flooding to local emergency services or law 
+enforcement and request they pass this information to the National 
+Weather Service when you can do so safely.
+
+&&
+
+LAT...LON 4221 8368 4221 8356 4210 8355 4209 8368
+
+FLASH FLOOD...RADAR INDICATED
+
+$$
+
+Cb
+
+

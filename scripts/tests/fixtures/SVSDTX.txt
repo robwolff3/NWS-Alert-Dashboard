@@ -1,0 +1,34 @@
+
+059 
+WWUS53 KDTX 120502
+SVSDTX
+
+Severe Weather Statement
+National Weather Service Detroit/Pontiac MI
+102 AM EDT Fri Jun 12 2026
+
+MIC161-120512-
+/O.CAN.KDTX.SV.W.0070.000000T0000Z-260612T0515Z/
+Washtenaw MI-
+102 AM EDT Fri Jun 12 2026
+
+...THE SEVERE THUNDERSTORM WARNING FOR EASTERN WASHTENAW COUNTY IS
+CANCELLED...
+
+The storms which prompted the warning have moved out of the area.
+Therefore, the warning has been cancelled.
+
+A Tornado Watch remains in effect until 200 AM EDT for southeastern
+Michigan.
+
+&&
+
+LAT...LON 4243 8379 4244 8360 4244 8356 4209 8355
+      4209 8358 4208 8400
+TIME...MOT...LOC 0459Z 257DEG 48KT 4236 8332 4222 8338 4206 8351 
+
+$$
+
+DRK
+
+

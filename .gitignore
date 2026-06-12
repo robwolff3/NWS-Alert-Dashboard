@@ -1,0 +1,11 @@
+# Secrets and host-specific config
+.env
+compose.override.yaml
+
+# Runtime data (bind mounts)
+alerts/
+recordings/
+
+# Python
+__pycache__/
+*.pyc
