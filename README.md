@@ -19,6 +19,26 @@ once** via whichever source delivered first, and merges the richer details
 decoded off the air, the broadcast audio is recorded, and the map falls back
 to locally cached county boundaries. No cloud dependency in the warning path.
 
+> [!WARNING]
+> **Unofficial project — not affiliated with, endorsed by, or supported by NOAA
+> or the National Weather Service.** Treat it as a *supplementary* monitor,
+> **never your only source of life-safety warnings.** Software, hardware, radio
+> reception, and network links can and do fail, delay, drop, or misreport
+> alerts. Always keep an official channel: a battery-backed NWR/SAME weather
+> radio, Wireless Emergency Alerts (WEA) on your phone, outdoor sirens, and
+> local media. Provided **with no warranty** — see [Disclaimer](#disclaimer)
+> and [LICENSE](LICENSE).
+
+<!-- Screenshots sell this on r/selfhosted and r/tornado — add a few under docs/
+     and uncomment. Suggested set: an active warning with its storm polygon
+     (dark theme), the light theme, and a phone web-push notification.
+## Screenshots
+
+![Dashboard — active warning with storm polygon (dark)](docs/dashboard-dark.png)
+![Dashboard — light theme](docs/dashboard-light.png)
+![Web-push notification on mobile](docs/push-notification.png)
+-->
+
 ## Features
 
 - **Web dashboard** (PWA): live-updating (SSE) active/historical alerts with
@@ -157,6 +177,56 @@ docker exec weatherradio python3 /app/scripts/nwws_client.py \
   point `MAP_TILE_URL` at another provider or a self-hosted tile server if
   you need more.
 - api.weather.gov requires a contact address in `API_USER_AGENT`.
+
+## Disclaimer
+
+This software is an independent, hobbyist project. It is **not** affiliated
+with, endorsed by, or supported by NOAA, the National Weather Service, or any
+government agency.
+
+- **Not a primary warning source.** Use it to *supplement* — never replace —
+  official life-safety channels: NOAA Weather Radio, Wireless Emergency Alerts
+  (WEA), outdoor sirens, TV/radio broadcasts, and the official
+  [weather.gov](https://www.weather.gov/).
+- **No guarantee of accuracy, completeness, or timeliness.** Alerts may be
+  missed, delayed, duplicated, mis-prioritized, or rendered incorrectly. Radio
+  reception depends on hardware, antenna, terrain, and transmitter status; the
+  push and poll sources depend on third-party availability.
+- **No warranty.** As stated in the [GPLv3 LICENSE](LICENSE), the software is
+  provided "as is", without warranty of any kind. You assume all risk for how
+  you deploy it and what you rely on it for.
+- **Your responsibility:** comply with the terms of each data source you enable
+  — the [NWWS-OI](https://www.weather.gov/nwws/) usage guidelines, the
+  [api.weather.gov](https://www.weather.gov/documentation/services-web-api)
+  terms, and the
+  [OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+
+## Acknowledgements
+
+Built on excellent open-source work:
+
+- **[dsame3](https://github.com/jamieden/dsame3)** — SAME/EAS message decoding
+  (a Python 3 SAME decoder in the `dsame` lineage); cloned and patched at build
+- **[multimon-ng](https://github.com/EliasOenal/multimon-ng)** — SAME/AFSK
+  demodulation from the FM audio stream
+- **[rtl-sdr](https://osmocom.org/projects/rtl-sdr/wiki)** (Osmocom) — RTL2832U
+  SDR tools (`rtl_fm`)
+- **[slixmpp](https://slixmpp.readthedocs.io/)** — XMPP client for the NWWS-OI feed
+- **[Apprise](https://github.com/caronc/apprise)** — multi-service notifications
+- **[Leaflet](https://leafletjs.com/)** — interactive web maps
+- **[OpenStreetMap](https://www.openstreetmap.org/copyright)** — base map tiles
+  (© OpenStreetMap contributors,
+  [ODbL](https://opendatacommons.org/licenses/odbl/))
+- **[Pillow](https://python-pillow.org/)**,
+  **[Flask](https://flask.palletsprojects.com/)**,
+  **[waitress](https://github.com/Pylons/waitress)**,
+  **[pywebpush](https://github.com/web-push-libs/pywebpush)**,
+  **[paho-mqtt](https://github.com/eclipse/paho.mqtt.python)**
+
+Alert data comes from the **U.S. National Weather Service / NOAA** —
+[api.weather.gov](https://www.weather.gov/documentation/services-web-api), the
+[NWWS-OI](https://www.weather.gov/nwws/) feed, and NOAA Weather Radio
+broadcasts. NWS products are public-domain U.S. government works.
 
 ## License
 
