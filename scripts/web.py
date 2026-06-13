@@ -28,6 +28,19 @@ SITE_FOOTER   = os.environ.get('SITE_FOOTER',   '')
 WEB_PUSH_ENABLED = os.environ.get('WEB_PUSH_ENABLED', 'true').strip().lower() \
     not in ('0', 'false', 'no', 'off')
 
+# Radio toggle: when false there is no /tmp/audio_fifo to stream, so the
+# Live Radio player is omitted from the page entirely.
+RADIO_ENABLED = os.environ.get('RADIO_ENABLED', 'true').strip().lower() \
+    not in ('0', 'false', 'no', 'off')
+
+_LIVE_PLAYER_HTML = '''<div class="live-player">
+  <div class="live-dot" id="live-dot"></div>
+  <span class="live-label">Live Radio</span>
+  <audio id="live-audio" controls preload="none">
+    <source src="/stream" type="audio/wav">
+  </audio>
+</div>'''
+
 DERIVED_JSON = '/alerts/derived_config.json'
 
 
@@ -405,13 +418,7 @@ section{margin-bottom:2rem}
   </div>
 </header>
 
-<div class="live-player">
-  <div class="live-dot" id="live-dot"></div>
-  <span class="live-label">Live Radio</span>
-  <audio id="live-audio" controls preload="none">
-    <source src="/stream" type="audio/wav">
-  </audio>
-</div>
+__LIVE_PLAYER__
 
 <div class="notif-bar" id="notif-bar" style="display:none">
   <div class="notif-dot" id="notif-dot"></div>
@@ -1015,6 +1022,7 @@ initPush();
 (function() {
   const audio = document.getElementById('live-audio');
   const dot   = document.getElementById('live-dot');
+  if (!audio) return;   // Live Radio player omitted (RADIO_ENABLED=false)
 
   audio.addEventListener('playing', () => dot.classList.add('connected'));
   audio.addEventListener('pause',   () => dot.classList.remove('connected'));
@@ -1047,6 +1055,7 @@ def index():
         .replace('__SUBTITLE__', _html.escape(_resolved_subtitle()))
         .replace('__FOOTER__',   _html.escape(SITE_FOOTER))
         .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
+        .replace('__LIVE_PLAYER__', _LIVE_PLAYER_HTML if RADIO_ENABLED else '')
     )
     return page, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
