@@ -183,9 +183,7 @@ header{
   margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);
 }
 .header-brand{display:flex;align-items:center;gap:.9rem}
-/* The logo PNG has a baked-in dark background; round it into a deliberate
-   badge so it reads as intentional on the light theme instead of a black box. */
-.nwr-logo{height:52px;width:auto;flex-shrink:0;border-radius:.5rem;background:#0f1117}
+.nwr-logo{height:52px;width:auto;flex-shrink:0}
 .header-title{font-size:1rem;font-weight:700;letter-spacing:.03em;line-height:1.2}
 .header-subtitle{font-size:.7rem;color:var(--muted);letter-spacing:.05em;margin-top:.15rem}
 .header-right{display:flex;align-items:center;gap:.6rem}
@@ -377,7 +375,7 @@ section{margin-bottom:2rem}
 <body>
 <header>
   <div class="header-brand">
-    <img src="/icons/icon-192.png" alt="NWR All Hazards" class="nwr-logo">
+    <img src="/icons/logo.png" alt="NOAA Weather Radio All Hazards" class="nwr-logo">
     <div>
       <div class="header-title">__TITLE__</div>
       <div class="header-subtitle">__SUBTITLE__</div>
