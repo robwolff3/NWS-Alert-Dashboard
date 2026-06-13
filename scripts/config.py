@@ -100,6 +100,22 @@ VTEC_TO_EEE = {
     ('DS', 'W'): 'DSW',
     ('FZ', 'W'): 'FZW',
     ('CF', 'W'): 'CFW', ('CF', 'A'): 'CFA',
+    # Non-EAS advisories/warnings. These have no official SAME code (so they
+    # never arrive by radio) but are common api.weather.gov/NWWS products.
+    # We assign stable internal pseudo-EEE codes so they route through the same
+    # EEE-based filter + priority machinery as real EAS events.
+    ('EH', 'W'): 'EHW', ('EH', 'A'): 'EHA',   # Excessive Heat Warning / Watch
+    ('HT', 'Y'): 'HTY',                        # Heat Advisory
+    ('EC', 'W'): 'ECW', ('EC', 'A'): 'ECA',   # Extreme Cold Warning / Watch
+    ('WC', 'W'): 'WCW', ('WC', 'Y'): 'WCY', ('WC', 'A'): 'WCA',  # Wind Chill (legacy)
+    ('WW', 'Y'): 'WWY',                        # Winter Weather Advisory
+    ('WI', 'Y'): 'WIY',                        # Wind Advisory
+    ('FG', 'Y'): 'FGY',                        # Dense Fog Advisory
+    ('FR', 'Y'): 'FRY',                        # Frost Advisory
+    ('FZ', 'A'): 'FZA',                        # Freeze Watch (FZ.W is FZW above)
+    ('HZ', 'W'): 'HZW', ('HZ', 'A'): 'HZA',   # Hard Freeze Warning / Watch
+    ('FW', 'W'): 'RFW', ('FW', 'A'): 'FWA',   # Red Flag Warning / Fire Weather Watch
+    ('DU', 'Y'): 'DUY',                        # Blowing Dust Advisory
 }
 EEE_TO_VTEC = {}
 for _pair, _eee in VTEC_TO_EEE.items():
@@ -145,6 +161,21 @@ NWS_EVENT_TO_EEE = {
     'Special Weather Statement': 'SPS',
     '911 Telephone Outage Emergency': 'TOE',
     'Child Abduction Emergency': 'CAE',
+    # Non-EAS advisories/warnings (API/NWWS only — see pseudo-codes above)
+    'Excessive Heat Warning': 'EHW', 'Excessive Heat Watch': 'EHA',
+    'Heat Advisory': 'HTY',
+    'Extreme Cold Warning': 'ECW', 'Extreme Cold Watch': 'ECA',
+    'Wind Chill Warning': 'WCW', 'Wind Chill Advisory': 'WCY',
+    'Wind Chill Watch': 'WCA',
+    'Winter Weather Advisory': 'WWY',
+    'Wind Advisory': 'WIY',
+    'Dense Fog Advisory': 'FGY',
+    'Frost Advisory': 'FRY',
+    'Freeze Watch': 'FZA',
+    'Hard Freeze Warning': 'HZW', 'Hard Freeze Watch': 'HZA',
+    'Red Flag Warning': 'RFW', 'Fire Weather Watch': 'FWA',
+    'Blowing Dust Advisory': 'DUY',
+    'Air Quality Alert': 'AQA',
 }
 
 # State/territory USPS abbreviation → 2-digit FIPS, for UGC↔FIPS conversion.

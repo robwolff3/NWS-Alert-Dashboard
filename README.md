@@ -21,9 +21,14 @@ to locally cached county boundaries. No cloud dependency in the warning path.
 
 ## Features
 
-- **Web dashboard** (PWA): live radio stream, active/historical alerts with
+- **Web dashboard** (PWA): live-updating (SSE) active/historical alerts with
   source badges (RADIO / NWWS / API), full alert text, broadcast recordings,
-  interactive Leaflet maps served from a **local tile cache**
+  live radio stream, and interactive Leaflet maps served from a **local tile
+  cache** — plus light/dark themes and per-source health chips (tuned
+  frequency, NWWS, API) that show at a glance when a source is down
+- **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories
+  (excessive heat, extreme cold, red flag, dense fog, wind, …) that only
+  arrive via the API/NWWS sources — tune the set in `FILTER_EVENT_CODES`
 - **Alert maps**: per-alert PNG rendered offline (Pillow over cached OSM
   tiles) and attached to notifications; storm polygon when available, county
   boundaries otherwise
@@ -48,8 +53,9 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open `http://host:8082`. Click **Send test alert** to verify notifications
-and map rendering end-to-end.
+Open `http://host:8082`. To verify notifications and map rendering
+end-to-end, uncheck **Hide test alerts** in the Alert History header to
+reveal the **Send test alert** button, then click it.
 
 ## Adding the radio source
 
@@ -154,4 +160,4 @@ docker exec weatherradio python3 /app/scripts/nwws_client.py \
 
 ## License
 
-[MIT](LICENSE)
+[GNU General Public License v3.0](LICENSE)

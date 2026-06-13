@@ -21,6 +21,7 @@ SAMPLE_WIDTH  = 2        # 16-bit
 SEGMENT_SECS  = 60
 KEEP_SEGMENTS = 12       # 12 minutes of rolling history
 FIFO_PATH     = '/tmp/audio_fifo'
+ALIVE_PATH    = '/tmp/radio_alive'   # touched while audio is flowing (radio health)
 
 _shutdown = False
 
@@ -72,6 +73,7 @@ def main():
     wav          = None
     current_path = None
     written      = 0
+    last_alive   = 0.0
 
     # Pre-populate from disk so restarts don't orphan old segments
     segments = sorted(out_dir.glob('seg_*.wav'))
@@ -89,6 +91,19 @@ def main():
         # Pass through to multimon-ng
         stdout.write(data)
         stdout.flush()
+
+        # Radio liveness heartbeat — goes stale within seconds if rtl_fm dies,
+        # so the dashboard can flag the radio as down (touch at most every ~3s)
+        now = time.time()
+        if now - last_alive > 3:
+            try:
+                os.utime(ALIVE_PATH, None)
+            except OSError:
+                try:
+                    open(ALIVE_PATH, 'wb').close()
+                except OSError:
+                    pass
+            last_alive = now
 
         # Feed live stream queue (non-blocking — drop if nobody is listening)
         try:

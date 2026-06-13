@@ -23,6 +23,32 @@ SITE_TITLE    = os.environ.get('SITE_TITLE',    'NWS Alert Dashboard')
 SITE_SUBTITLE = os.environ.get('SITE_SUBTITLE', '')
 SITE_FOOTER   = os.environ.get('SITE_FOOTER',   '')
 
+# Web-push UI toggle: when false the dashboard hides the browser-notification
+# bar entirely (server still ignores any orphaned subscriptions).
+WEB_PUSH_ENABLED = os.environ.get('WEB_PUSH_ENABLED', 'true').strip().lower() \
+    not in ('0', 'false', 'no', 'off')
+
+DERIVED_JSON = '/alerts/derived_config.json'
+
+
+def _resolved_subtitle():
+    """SITE_SUBTITLE if set, else the detected/configured location label."""
+    if SITE_SUBTITLE:
+        return SITE_SUBTITLE
+    try:
+        with open(DERIVED_JSON) as f:
+            info = json.load(f)
+        near   = (info.get('near') or '').strip()
+        cwa    = (info.get('cwa') or '').strip()
+        county = (info.get('county_ugc') or '').strip()
+        state  = county[:2] if len(county) >= 2 and county[:2].isalpha() else ''
+        if near:
+            label = f'{near}, {state}' if state else near
+            return f'{label} · {cwa}' if cwa else label
+    except (OSError, ValueError):
+        pass
+    return os.environ.get('LOCATION', '').strip()
+
 _MANIFEST = {
     'name': 'NWS Alert Dashboard',
     'short_name': 'NWS Alerts',
@@ -102,6 +128,7 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>__TITLE__</title>
+<script>(function(){var t=localStorage.getItem('theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);})();</script>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0f1117">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -121,6 +148,29 @@ _HTML = r"""<!DOCTYPE html>
   --p4:    #ea580c; --p4-bg: #2d1007;
   --p3:    #ca8a04; --p3-bg: #2a1a00;
   --p2:    #2563eb; --p2-bg: #0c1a3e;
+  color-scheme: dark;
+}
+/* Light theme — applied when the user picks it, or by OS preference when they
+   haven't (auto). The early inline script sets data-theme for explicit picks. */
+:root[data-theme="light"]{
+  --bg:#f4f6fa; --surface:#ffffff; --border:#d6dbe4;
+  --text:#1a1d26; --muted:#5a6577;
+  --p5:#dc2626; --p5-bg:#fde8e8;
+  --p4:#ea580c; --p4-bg:#fdebd8;
+  --p3:#b8860b; --p3-bg:#fbf3d2;
+  --p2:#2563eb; --p2-bg:#dde8fd;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme]){
+    --bg:#f4f6fa; --surface:#ffffff; --border:#d6dbe4;
+    --text:#1a1d26; --muted:#5a6577;
+    --p5:#dc2626; --p5-bg:#fde8e8;
+    --p4:#ea580c; --p4-bg:#fdebd8;
+    --p3:#b8860b; --p3-bg:#fbf3d2;
+    --p2:#2563eb; --p2-bg:#dde8fd;
+    color-scheme: light;
+  }
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
@@ -133,13 +183,31 @@ header{
   margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border);
 }
 .header-brand{display:flex;align-items:center;gap:.9rem}
-.nwr-logo{height:52px;width:auto;flex-shrink:0}
+/* The logo PNG has a baked-in dark background; round it into a deliberate
+   badge so it reads as intentional on the light theme instead of a black box. */
+.nwr-logo{height:52px;width:auto;flex-shrink:0;border-radius:.5rem;background:#0f1117}
 .header-title{font-size:1rem;font-weight:700;letter-spacing:.03em;line-height:1.2}
 .header-subtitle{font-size:.7rem;color:var(--muted);letter-spacing:.05em;margin-top:.15rem}
-.header-right{display:flex;flex-direction:column;align-items:flex-end;gap:.25rem}
-.freq{font-size:.75rem;color:var(--text);font-family:monospace}
-.freq span{color:var(--muted)}
-.status{font-size:.7rem;color:var(--muted)}
+.header-right{display:flex;align-items:center;gap:.6rem}
+.status-chips{display:flex;flex-wrap:wrap;gap:.3rem;justify-content:flex-end;max-width:14rem}
+.theme-toggle{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  width:1.9rem;height:1.9rem;border-radius:.4rem;font-size:.85rem;line-height:1;
+  cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+}
+.theme-toggle:hover{background:var(--border)}
+.updated{
+  font-size:.65rem;font-weight:400;color:var(--muted);
+  text-transform:none;letter-spacing:normal;
+}
+.history-controls{display:flex;align-items:center;gap:0}
+.ctrl-toggle,.test-btn{
+  border-left:1px dashed var(--border);padding-left:.75rem;margin-left:.75rem;
+}
+.ctrl-toggle{
+  font-size:.65rem;font-weight:400;text-transform:none;letter-spacing:normal;
+  color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:.3rem;
+}
 .section-label{
   font-size:.8rem;font-weight:700;letter-spacing:.12em;
   text-transform:uppercase;color:var(--text);
@@ -316,9 +384,9 @@ section{margin-bottom:2rem}
     </div>
   </div>
   <div class="header-right">
-    <div class="freq"><span>frequency </span><span id="freq">—</span> MHz</div>
-    <div class="freq" id="src-health"></div>
-    <div class="status" id="status">loading…</div>
+    <div class="status-chips" id="src-health"></div>
+    <button class="theme-toggle" id="theme-toggle" type="button"
+            title="Theme: auto / light / dark" onclick="cycleTheme()">◐</button>
   </div>
 </header>
 
@@ -348,17 +416,22 @@ section{margin-bottom:2rem}
 </div>
 
 <section id="active-section">
-  <div class="section-label">Active Alerts</div>
+  <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
+    <span>Active Alerts</span>
+    <span class="updated" id="status">loading…</span>
+  </div>
   <div id="active"></div>
 </section>
 
 <section>
-  <div class="section-label" style="display:flex;align-items:center;justify-content:space-between">
+  <div class="section-label" style="display:flex;align-items:center;justify-content:space-between;gap:1rem">
     <span>Alert History</span>
-    <label style="font-size:.65rem;font-weight:400;text-transform:none;letter-spacing:normal;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:.3rem">
-      <input type="checkbox" id="hide-rwt" onchange="onHideRwtChange(this)"> Hide weekly tests
-    </label>
-    <button class="page-btn" onclick="sendTestAlert(this)" title="Inject a demo alert through the full pipeline">Send test alert</button>
+    <div class="history-controls">
+      <label class="ctrl-toggle">
+        <input type="checkbox" id="hide-rwt" onchange="onHideRwtChange(this)"> Hide test alerts
+      </label>
+      <button class="page-btn test-btn" id="test-btn" onclick="sendTestAlert(this)" title="Inject a demo alert through the full pipeline">Send test alert</button>
+    </div>
   </div>
   <div id="history"></div>
 </section>
@@ -444,13 +517,21 @@ const PRIORITY_HEX = {5: '#dc2626', 4: '#ea580c', 3: '#ca8a04', 2: '#2563eb', 1:
 let _maps = {};       // alert id → L.map
 let _mapMeta = {zoom_min: 6, zoom_max: 11, ready: true};
 
-function mapHtml(a) {
+function mapHtml(a, active) {
   if (typeof L === 'undefined') return '';
   if (!a.geometry && !a.fips && !a.ugc) return '';
-  return `<details class="alert-details" data-mapdetails="${esc(a.id)}"
+  // Active alerts show their map expanded by default; history stays collapsed.
+  return `<details class="alert-details" data-mapdetails="${esc(a.id)}"${active ? ' open' : ''}
             ontoggle="if(this.open) initAlertMap('${esc(a.id)}')">
     <summary>Map</summary><div class="alert-map" id="map-${esc(a.id)}"></div>
   </details>`;
+}
+
+function initOpenMaps() {
+  // <details open> rendered from a string never fires ontoggle, so initialize
+  // any already-open map panels (default-open active alerts) explicitly.
+  document.querySelectorAll('details[data-mapdetails][open]')
+    .forEach(d => initAlertMap(d.dataset.mapdetails));
 }
 
 async function initAlertMap(id) {
@@ -532,7 +613,7 @@ function card(a, active) {
     <div class="eee">EEE: ${esc(a.eee)}</div>
     <div class="header-msg">${esc(a.header_message)}</div>
     ${detailsHtml(a)}
-    ${mapHtml(a)}
+    ${mapHtml(a, active)}
     ${voiceHtml(a)}
   </div>`;
 }
@@ -544,9 +625,19 @@ function tickCountdowns() {
 }
 
 let allAlerts = [];
-let hideRWT = localStorage.getItem('hideRWT') !== 'false';
+let hideTests = localStorage.getItem('hideTests') !== 'false';
 let historyPage = 0;
 const PAGE_SIZE = 3;
+
+// Test-category alerts: the demo "Send test alert" rows plus the weekly/monthly
+// test EAS products. "Hide test alerts" hides all of these and the send button.
+const TEST_EEE = new Set(['RWT', 'RMT', 'NPT', 'NST', 'NAT', 'DMO']);
+const isTestAlert = a => !!a.is_test || TEST_EEE.has(a.eee);
+
+function applyTestUI() {
+  const btn = document.getElementById('test-btn');
+  if (btn) btn.style.display = hideTests ? 'none' : '';
+}
 
 function saveAudioStates() {
   const states = {};
@@ -592,7 +683,7 @@ function renderHistory(history) {
 function changePage(delta) {
   historyPage += delta;
   const now = Date.now() / 1000;
-  const vis = hideRWT ? allAlerts.filter(a => a.eee !== 'RWT') : allAlerts;
+  const vis = hideTests ? allAlerts.filter(a => !isTestAlert(a)) : allAlerts;
   const history = vis.filter(a => !a.expires_at || a.expires_at <= now);
   const saved = saveAudioStates();
   renderHistory(history);
@@ -600,8 +691,8 @@ function changePage(delta) {
 }
 
 function onHideRwtChange(cb) {
-  hideRWT = cb.checked;
-  localStorage.setItem('hideRWT', hideRWT);
+  hideTests = cb.checked;
+  localStorage.setItem('hideTests', hideTests);
   render(allAlerts);
 }
 
@@ -621,8 +712,9 @@ async function sendTestAlert(btn) {
 
 function render(alerts) {
   allAlerts = alerts;
+  applyTestUI();
   const now = Date.now() / 1000;
-  const vis = hideRWT ? alerts.filter(a => a.eee !== 'RWT') : alerts;
+  const vis = hideTests ? alerts.filter(a => !isTestAlert(a)) : alerts;
   const active  = vis.filter(a => a.expires_at && a.expires_at > now);
   const history = vis.filter(a => !a.expires_at || a.expires_at <= now);
 
@@ -637,6 +729,7 @@ function render(alerts) {
   renderHistory(history);
   restoreAudioStates(saved);
   restoreOpenMaps(openMaps);
+  initOpenMaps();   // active-alert maps render expanded by default
 }
 
 // Tick countdowns every second without hitting the server
@@ -648,38 +741,60 @@ async function pollStatus() {
     const r = await fetch('/api/status');
     if (r.ok) {
       const st = await r.json();
-      document.getElementById('freq').textContent = st.frequency ?? '—';
-      renderSourceHealth(st.sources || {});
+      renderSourceHealth(st);
       if (st.map && st.map.zoom_max) _mapMeta = st.map;
     }
   } catch(_) {}
   setTimeout(pollStatus, 30000);
 }
 
-function renderSourceHealth(sources) {
+function healthChip(cls, label, ok) {
+  // ● = working, ○ (dimmed) = enabled but not currently working
+  return `<span class="src-badge ${cls}" style="${ok ? '' : 'opacity:.4'}"` +
+         ` title="${ok ? 'online' : 'down'}">${esc(label)} ${ok ? '●' : '○'}</span>`;
+}
+
+function renderSourceHealth(st) {
+  const radio = st.radio || {};
+  const nwws  = st.nwws  || {};
+  const api   = st.api   || {};
   const now = Date.now() / 1000;
   const chips = [];
-  if (sources.nwws) {
-    const ok = sources.nwws.connected;
-    chips.push(`<span class="src-badge src-nwws" style="${ok ? '' : 'opacity:.4'}">NWWS ${ok ? '●' : '○'}</span>`);
+  // Every *enabled* source gets a chip and shows its up/down state. The radio
+  // chip carries the tuned frequency while audio is flowing, else "RADIO".
+  if (radio.enabled) {
+    const ok = !!radio.alive;
+    const freq = st.frequency && st.frequency !== '—' ? `${st.frequency} MHz` : 'RADIO';
+    chips.push(healthChip('src-radio', ok ? freq : 'RADIO', ok));
   }
-  if (sources.api && sources.api.enabled !== false) {
-    const ok = sources.api.last_success_ts && (now - sources.api.last_success_ts) < 600;
-    chips.push(`<span class="src-badge src-api" style="${ok ? '' : 'opacity:.4'}">API ${ok ? '●' : '○'}</span>`);
+  if (nwws.enabled) {
+    chips.push(healthChip('src-nwws', 'NWWS', !!nwws.connected));
+  }
+  if (api.enabled) {
+    const ok = !!(api.last_success_ts && (now - api.last_success_ts) < 600);
+    chips.push(healthChip('src-api', 'API', ok));
   }
   document.getElementById('src-health').innerHTML = chips.join('');
 }
 
-// SSE — server pushes alert snapshots whenever the DB changes
+// SSE — server pushes alert snapshots whenever the DB changes, so a loaded
+// page updates live with no refresh. The label shows the last push time.
+function setUpdated(text) {
+  document.getElementById('status').textContent = text;
+}
 function connectSSE() {
   const es = new EventSource('/events');
+  es.onopen = () => setUpdated('live');
   es.onmessage = (e) => {
     render(JSON.parse(e.data));
-    document.getElementById('status').textContent = `updated ${new Date().toLocaleTimeString()}`;
+    setUpdated(`updated ${new Date().toLocaleTimeString()}`);
   };
-  es.onerror = () => {
-    document.getElementById('status').textContent = 'reconnecting…';
-  };
+  es.addEventListener('ping', () => {
+    // keep-alive proves the stream is live even when nothing has changed
+    const cur = document.getElementById('status').textContent;
+    if (cur === 'live' || cur === 'loading…') setUpdated('live');
+  });
+  es.onerror = () => setUpdated('reconnecting…');
 }
 
 // ── Web Push ──────────────────────────────────────────────────────────────────
@@ -691,6 +806,7 @@ const EAS_GROUPS = [
   ['Winter & Wind',[['WSW','Winter Storm Warning'],['WSA','Winter Storm Watch'],['WFW','Winter Fire Weather Warning'],['WFA','Winter Fire Weather Watch'],['BZW','Blizzard Warning'],['HWW','High Wind Warning'],['HWA','High Wind Watch'],['FZW','Freeze Warning'],['FSW','Freezing Spray Warning'],['BHW','Blowing Dust Warning'],['BWW','Brisk Wind Warning'],['DSW','Dust Storm Warning']]],
   ['Civil Emergency',[['EAN','Emergency Action Notification'],['EAT','Emergency Action Termination'],['NIC','National Information Center'],['LAE','Local Area Emergency'],['CEM','Civil Emergency Message'],['CDW','Civil Danger Warning'],['CAE','Child Abduction Emergency'],['EVI','Evacuation – Immediate'],['EVA','Evacuation Watch'],['LEW','Law Enforcement Warning'],['SPW','Shelter-in-Place Warning'],['NUW','Nuclear Power Plant Warning'],['RHW','Radiological Hazard Warning']]],
   ['Other Hazards',[['EQW','Earthquake Warning'],['VOW','Volcano Warning'],['LSW','Landslide Warning'],['HMW','Hazardous Materials Warning'],['FRW','Fire Warning'],['IFW','Industrial Fire Warning'],['CWW','Contaminated Water Warning'],['CHW','Chemical Hazard Warning'],['IBW','Iceberg Warning'],['POS','Power Outage Statement'],['SMW','Special Marine Warning'],['ADR','Administrative Message']]],
+  ['Advisories (non-EAS)',[['EHW','Excessive Heat Warning'],['EHA','Excessive Heat Watch'],['HTY','Heat Advisory'],['ECW','Extreme Cold Warning'],['ECA','Extreme Cold Watch'],['WCW','Wind Chill Warning'],['WCY','Wind Chill Advisory'],['WWY','Winter Weather Advisory'],['WIY','Wind Advisory'],['FGY','Dense Fog Advisory'],['FRY','Frost Advisory'],['FZA','Freeze Watch'],['HZW','Hard Freeze Warning'],['HZA','Hard Freeze Watch'],['RFW','Red Flag Warning'],['FWA','Fire Weather Watch'],['DUY','Blowing Dust Advisory'],['AQA','Air Quality Alert']]],
   ['Tests',[['RWT','Required Weekly Test'],['RMT','Required Monthly Test'],['NPT','National Periodic Test'],['NST','National Silent Test'],['NAT','National Audible Test'],['DMO','Practice Demo']]],
 ];
 
@@ -754,7 +870,10 @@ async function _restorePrefs(sub) {
   } catch(_) {}
 }
 
+const PUSH_ENABLED = __PUSH_ENABLED__;
+
 async function initPush() {
+  if (!PUSH_ENABLED) return;   // disabled via WEB_PUSH_ENABLED
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try {
     _swReg = await navigator.serviceWorker.ready;
@@ -845,7 +964,34 @@ async function updatePriority() {
   });
 }
 
-document.getElementById('hide-rwt').checked = hideRWT;
+// ── Light / dark theme (auto = follow OS, then light, then dark) ─────────────
+const THEME_ORDER = ['auto', 'light', 'dark'];
+const THEME_ICON  = {auto: '◐', light: '☀', dark: '☾'};
+
+function currentTheme() {
+  return localStorage.getItem('theme') || 'auto';
+}
+function applyTheme(t) {
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('theme', t);
+  refreshThemeBtn();
+}
+function refreshThemeBtn() {
+  const t   = currentTheme();
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  btn.textContent = THEME_ICON[t];
+  btn.title = `Theme: ${t} (click to change)`;
+}
+function cycleTheme() {
+  const next = THEME_ORDER[(THEME_ORDER.indexOf(currentTheme()) + 1) % THEME_ORDER.length];
+  applyTheme(next);
+}
+refreshThemeBtn();
+
+document.getElementById('hide-rwt').checked = hideTests;
+applyTestUI();
 pollStatus();
 connectSSE();
 initPush();
@@ -867,8 +1013,6 @@ initPush();
     audio.play().catch(() => {});
   }
 })();
-
-loop();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
@@ -885,8 +1029,9 @@ if ('serviceWorker' in navigator) {
 def index():
     page = (_HTML
         .replace('__TITLE__',    _html.escape(SITE_TITLE))
-        .replace('__SUBTITLE__', _html.escape(SITE_SUBTITLE))
+        .replace('__SUBTITLE__', _html.escape(_resolved_subtitle()))
         .replace('__FOOTER__',   _html.escape(SITE_FOOTER))
+        .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
     )
     return page, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
@@ -991,8 +1136,29 @@ def status():
                     'ready': bool(m.get('complete'))}
     except (OSError, ValueError):
         pass
-    return jsonify({'frequency': freq, 'sources': cfg.get_source_status(),
-                    'map': map_meta})
+    radio_enabled = cfg.env_bool('RADIO_ENABLED', True)
+    radio_alive = False
+    if radio_enabled:
+        try:
+            radio_alive = (time.time() - os.path.getmtime('/tmp/radio_alive')) < 30
+        except OSError:
+            radio_alive = False
+    # Enabled state comes from config (source of truth for which chips to show);
+    # health comes from the per-source status file. This way an enabled source
+    # whose daemon never came up still shows a "down" chip rather than vanishing.
+    src = cfg.get_source_status()
+    nwws = src.get('nwws', {})
+    api  = src.get('api', {})
+    return jsonify({
+        'frequency': freq,
+        'radio': {'enabled': radio_enabled, 'alive': radio_alive},
+        'nwws':  {'enabled': cfg.env_bool('NWWS_ENABLED', False),
+                  'connected': bool(nwws.get('connected'))},
+        'api':   {'enabled': cfg.env_bool('API_ENABLED', True),
+                  'last_success_ts': api.get('last_success_ts')},
+        'sources': src,
+        'map': map_meta,
+    })
 
 
 @app.route('/events')
@@ -1017,7 +1183,7 @@ def events():
                 last_mtime = mtime
                 yield f'data: {json.dumps(alertdb.get_alerts(200))}\n\n'
             elif tick % 15 == 0:
-                yield ': ping\n\n'  # keep-alive comment
+                yield 'event: ping\ndata: 1\n\n'  # keep-alive (named so the client can react)
     return Response(generate(), mimetype='text/event-stream',
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
