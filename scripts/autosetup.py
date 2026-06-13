@@ -60,6 +60,22 @@ def main():
                 city = (props.get('relativeLocation') or {}) \
                     .get('properties', {}).get('city')
 
+                # County name (e.g. "Wayne") for the header subtitle — /points
+                # only gives the county zone URL, so fetch its name.
+                county_name = None
+                if props.get('county'):
+                    try:
+                        cr = requests.get(
+                            props['county'],
+                            headers={'User-Agent': config.env('API_USER_AGENT',
+                                                              'nws-alert-dashboard'),
+                                     'Accept': 'application/geo+json'},
+                            timeout=15)
+                        cr.raise_for_status()
+                        county_name = cr.json().get('properties', {}).get('name')
+                    except Exception:
+                        pass
+
                 same = None
                 if county_ugc:
                     fips = config.ugc_county_to_fips(county_ugc)
@@ -79,7 +95,8 @@ def main():
 
                 info = {
                     'location': [lat, lon], 'near': city, 'cwa': cwa,
-                    'county_ugc': county_ugc, 'forecast_zone': zone_ugc,
+                    'county_ugc': county_ugc, 'county_name': county_name,
+                    'forecast_zone': zone_ugc,
                     'same_code': same, 'derived': derived,
                     'updated': time.time(),
                 }

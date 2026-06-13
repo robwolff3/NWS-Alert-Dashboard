@@ -31,22 +31,39 @@ WEB_PUSH_ENABLED = os.environ.get('WEB_PUSH_ENABLED', 'true').strip().lower() \
 DERIVED_JSON = '/alerts/derived_config.json'
 
 
+def _cached_zone_name(ugc):
+    """County/zone name from the offline map cache (fallback for the subtitle)."""
+    if not ugc:
+        return ''
+    import config as cfg
+    p = Path(cfg.env('MAP_CACHE_DIR', '/alerts/mapdata')) / 'zones' / f'{ugc}.geojson'
+    try:
+        with open(p) as f:
+            return (json.load(f).get('name') or '').strip()
+    except (OSError, ValueError):
+        return ''
+
+
 def _resolved_subtitle():
-    """SITE_SUBTITLE if set, else the detected/configured location label."""
+    """SITE_SUBTITLE if set, else the detected location as 'City, County, ST'."""
     if SITE_SUBTITLE:
         return SITE_SUBTITLE
     try:
         with open(DERIVED_JSON) as f:
             info = json.load(f)
-        near   = (info.get('near') or '').strip()
-        cwa    = (info.get('cwa') or '').strip()
-        county = (info.get('county_ugc') or '').strip()
-        state  = county[:2] if len(county) >= 2 and county[:2].isalpha() else ''
-        if near:
-            label = f'{near}, {state}' if state else near
-            return f'{label} · {cwa}' if cwa else label
     except (OSError, ValueError):
-        pass
+        info = {}
+    near       = (info.get('near') or '').strip()
+    county_ugc = (info.get('county_ugc') or '').strip()
+    state  = county_ugc[:2] if len(county_ugc) >= 2 and county_ugc[:2].isalpha() else ''
+    county = (info.get('county_name') or '').strip() or _cached_zone_name(county_ugc)
+    if near:
+        parts = [near]
+        if county:
+            parts.append(f'{county} County')
+        if state:
+            parts.append(state)
+        return ', '.join(parts)
     return os.environ.get('LOCATION', '').strip()
 
 _MANIFEST = {
