@@ -1,7 +1,7 @@
 # Copy to compose.override.yaml and adjust for your host.
 # Docker Compose merges this with compose.yaml automatically.
 services:
-  weatherradio:
+  nwsalertdashboard:
     # RTL-SDR dongle passthrough (find yours: lsusb | grep -i rtl)
     devices:
       - ${RTL_DEVICE}:${RTL_DEVICE}

@@ -3,7 +3,7 @@
 # attention tone, silent voice window, EOM) and pipes it through the real
 # pipeline (recorder → multimon-ng → dsame3 → notify.py).
 # Run INSIDE the container:
-#   docker exec -e NTFY_TOPIC_DEFAULT=nws-test weatherradio bash /app/scripts/tests/test_inject.sh
+#   docker exec -e NTFY_TOPIC_DEFAULT=nws-test nwsalertdashboard bash /app/scripts/tests/test_inject.sh
 #
 # Expect: one new alert row, one notification, and (after the EOM wait,
 # ~RADIO_EOM_TRAIL_SECS) an audio file under /alerts/audio/.

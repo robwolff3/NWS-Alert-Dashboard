@@ -1,7 +1,7 @@
 services:
-  weatherradio:
+  nwsalertdashboard:
     build: .
-    container_name: weatherradio
+    container_name: nwsalertdashboard
     restart: unless-stopped
     env_file: .env
     ports:

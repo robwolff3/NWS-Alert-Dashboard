@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Parser unit tests against real archived products (fixtures/).
 
-  docker exec weatherradio python3 /app/scripts/tests/test_nwws_parse.py
+  docker exec nwsalertdashboard python3 /app/scripts/tests/test_nwws_parse.py
 """
 import os
 import sys

@@ -2,7 +2,7 @@
 """Cross-source dedup matrix. Runs against a throwaway SQLite DB with
 notification delivery stubbed out.
 
-  docker exec weatherradio python3 /app/scripts/tests/test_dedup.py
+  docker exec nwsalertdashboard python3 /app/scripts/tests/test_dedup.py
 """
 import json
 import os

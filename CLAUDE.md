@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-**NWS Alert Dashboard** (directory/container still named `weatherradio`): a
+**NWS Alert Dashboard** (directory and container named `nwsalertdashboard`): a
 multi-source NWS alert monitor. Three independently toggleable sources —
 NWWS-OI (XMPP push), NOAA Weather Radio (RTL-SDR + SAME decode), and the
 NOAA REST API (polling) — feed one ingest core that dedups across sources,
@@ -82,12 +82,12 @@ runs the radio pipeline in the foreground when `RADIO_ENABLED=true`.
 ## Testing
 
 ```bash
-docker exec weatherradio python3 /app/scripts/tests/test_dedup.py        # dedup matrix
-docker exec weatherradio python3 /app/scripts/tests/test_nwws_parse.py   # parser vs real fixtures
+docker exec nwsalertdashboard python3 /app/scripts/tests/test_dedup.py        # dedup matrix
+docker exec nwsalertdashboard python3 /app/scripts/tests/test_nwws_parse.py   # parser vs real fixtures
 # Full radio E2E (synthesized SAME audio through the real pipeline):
-docker exec -e NTFY_TOPIC_DEFAULT=nws-test weatherradio bash /app/scripts/tests/test_inject.sh
+docker exec -e NTFY_TOPIC_DEFAULT=nws-test nwsalertdashboard bash /app/scripts/tests/test_inject.sh
 # NWWS replay through ingest without XMPP:
-docker exec weatherradio python3 /app/scripts/nwws_client.py --replay /app/scripts/tests/fixtures/TORDTX.txt --log-only
+docker exec nwsalertdashboard python3 /app/scripts/nwws_client.py --replay /app/scripts/tests/fixtures/TORDTX.txt --log-only
 ```
 
 Note: in `test_inject.sh` the audio pipes faster than real time, so the
