@@ -64,6 +64,7 @@ RUN pip install --no-cache-dir \
     tqdm \
     requests \
     flask \
+    waitress \
     pywebpush \
     apprise \
     slixmpp \

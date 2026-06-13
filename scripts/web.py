@@ -1139,7 +1139,17 @@ def _cleanup_loop():
 
 
 if __name__ == '__main__':
+    import config as cfg
+    from waitress import serve
     alertdb.init_db()
     pushdb.init_push()
     threading.Thread(target=_cleanup_loop, daemon=True).start()
-    app.run(host='0.0.0.0', port=8082, threaded=True)
+    # Each SSE alert stream and live-audio stream holds a thread for the life
+    # of the connection, so size the pool well above expected concurrent
+    # clients. Default suits a handful of dashboard tabs; raise WEB_THREADS if
+    # you fan out to more devices.
+    threads = cfg.env_int('WEB_THREADS', 24)
+    print(f'web: serving on 0.0.0.0:8082 via waitress ({threads} threads)',
+          flush=True)
+    serve(app, host='0.0.0.0', port=8082, threads=threads,
+          channel_timeout=300, ident='nws-alert-dashboard')
