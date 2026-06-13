@@ -1,0 +1,11 @@
+# Whitelist: ignore everything, then re-include only what the image needs.
+# The Dockerfile COPYs just scripts/ and the test OGG, so nothing else
+# (secrets, runtime data, git history) needs to enter the build context.
+*
+
+!scripts/
+!Required_Weekly_Test_NOAA.ogg
+
+# Drop caches/tests that slip in via the re-included scripts/ dir.
+**/__pycache__/
+**/*.pyc
