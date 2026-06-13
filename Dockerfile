@@ -52,6 +52,10 @@ RUN python3 -c "p='/app/dsame3/dsame.py'; s=open(p).read(); old='    else:\n    
 # and reads decoded EAS lines from the pipeline instead.
 RUN python3 -c "p='/app/dsame3/dsame.py'; s=open(p).read(); old=\"parser.add_argument('--source', default='soundcard', choices=['rtl', 'soundcard', 'file']\"; new=\"parser.add_argument('--source', default=None, choices=['rtl', 'soundcard', 'file']\"; assert old in s, 'patch target not found'; open(p,'w').write(s.replace(old,new))"
 
+# dsame3 sets the Windows console title via os.system("title ..."); on Linux
+# sh this just prints "sh: 1: title: not found". Neuter it to keep logs clean.
+RUN python3 -c "p='/app/dsame3/dsame.py'; s=open(p).read(); s=s.replace('os.system(\"title \" + ', '# os.system(\"title \" + '); open(p,'w').write(s)"
+
 # numpy/sounddevice/soundfile/tqdm are top-level imports in dsame3
 RUN pip install --no-cache-dir \
     numpy \

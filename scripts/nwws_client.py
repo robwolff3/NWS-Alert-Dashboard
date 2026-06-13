@@ -156,6 +156,9 @@ def run_xmpp():
             self.add_event_handler('groupchat_message', self.on_message)
             self.add_event_handler('disconnected', self.on_disconnected)
             self.add_event_handler('failed_auth', self.on_failed_auth)
+            # We rotate hosts ourselves on every drop — disable slixmpp's
+            # built-in reconnect so the `disconnected` future actually resolves.
+            self.auto_reconnect = False
             self._stopping = False
 
         async def on_start(self, _):
@@ -207,8 +210,10 @@ def run_xmpp():
         print(f'nwws: connecting to {host}:5222 ...', flush=True)
         bot = NWWSBot()
         try:
-            bot.connect((host, 5222))
-            bot.process(forever=True)   # returns on disconnect
+            # slixmpp is asyncio-native (no .process()): schedule the connect,
+            # then drive the loop until the connection drops.
+            bot.connect(host, 5222)
+            bot.loop.run_until_complete(bot.disconnected)
         except Exception as e:
             print(f'nwws: connection error: {e}', flush=True)
         config.set_source_status('nwws', connected=False)
