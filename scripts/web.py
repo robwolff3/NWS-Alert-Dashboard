@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Minimal Flask frontend for dsame3 EAS alerts."""
 import sys
 sys.path.insert(0, '/app/scripts')

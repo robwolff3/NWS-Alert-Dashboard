@@ -1,3 +1,7 @@
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+
 """Shared alert persistence — SQLite-backed, safe for concurrent writers.
 
 Multi-source schema: each row is one canonical alert that may have been seen

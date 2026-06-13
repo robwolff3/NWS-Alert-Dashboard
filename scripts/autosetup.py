@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Location-based auto-setup.
 
 If LOCATION=lat,lon is set, derives any of these that are NOT already set:

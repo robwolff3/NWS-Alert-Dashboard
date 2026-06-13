@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Offline alert-map PNG renderer (Pillow only, no network).
 
 Composites cached OSM tiles for the viewport, overlays the alert polygon

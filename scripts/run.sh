@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 set -euo pipefail
 
 # ── Location auto-setup (derives SAME/zone/frequency vars when LOCATION set) ──

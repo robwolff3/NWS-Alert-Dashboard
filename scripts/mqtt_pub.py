@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Optional MQTT publishing for Home Assistant integration.
 
 On each notification or merge-update, publishes:

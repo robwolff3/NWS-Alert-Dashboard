@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Shared configuration: env helpers, event-code tables, source status file.
 
 Env vars are organized by source prefix (RADIO_*, NWWS_*, API_*) plus

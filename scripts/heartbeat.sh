@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 # Pings the Uptime Kuma push URL every 90s when the configured sources look
 # healthy. Radio mode: fresh WAV segments prove the SDR pipeline is alive.
 # Radio-less mode: source_status.json freshness proves a poller/push source

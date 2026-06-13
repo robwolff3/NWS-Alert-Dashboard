@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 # Radio-path end-to-end test: synthesizes a SAME weekly-test alert (header,
 # attention tone, silent voice window, EOM) and pipes it through the real
 # pipeline (recorder → multimon-ng → dsame3 → notify.py).

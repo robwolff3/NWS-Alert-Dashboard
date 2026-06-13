@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Parser unit tests against real archived products (fixtures/).
 
   docker exec nwsalertdashboard python3 /app/scripts/tests/test_nwws_parse.py

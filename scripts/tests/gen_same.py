@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+#
+# NWS Alert Dashboard
+# Copyright (C) 2026 Rob Wolff <rob@borked.io>
+# Licensed under the GNU General Public License v3.0 or later.
+#
 """Generate a synthetic SAME/EAS alert as raw PCM (22050 Hz s16le mono).
 
 Produces: 3× header bursts, attention-tone, a silent "voice message",
