@@ -264,6 +264,76 @@ NWS_EVENT_TO_EEE = {
     'Typhoon Local Statement': 'TYS',
 }
 
+# ── Event grouping (single source of truth) ──────────────────────────────────
+# Display names for codes that have no api.weather.gov event mapping above:
+# radio-only / extended SAME codes the decoder can emit, national/test codes,
+# plus a few disambiguations where one code serves multiple event names.
+_EXTRA_CODE_NAMES = {
+    'EAN': 'Emergency Action Notification', 'EAT': 'Emergency Action Termination',
+    'NIC': 'National Information Center', 'NMN': 'Network Message Notification',
+    'NPT': 'National Periodic Test', 'NST': 'National Silent Test',
+    'NAT': 'National Audible Test', 'RMT': 'Required Monthly Test',
+    'RWT': 'Required Weekly Test', 'DMO': 'Practice/Demo Warning',
+    'ADR': 'Administrative Message', 'POS': 'Power Outage Statement',
+    'BHW': 'Biological Hazard Warning', 'BWW': 'Boil Water Warning',
+    'CHW': 'Chemical Hazard Warning', 'CWW': 'Contaminated Water Warning',
+    'DEW': 'Contagious Disease Warning', 'FCW': 'Food Contamination Warning',
+    'DBA': 'Dam Watch', 'DBW': 'Dam Break Warning', 'IBW': 'Iceberg Warning',
+    'IFW': 'Industrial Fire Warning', 'FSW': 'Flash Freeze Warning',
+    'LSW': 'Landslide Warning', 'WFW': 'Wildfire Warning', 'WFA': 'Wildfire Watch',
+    'TOE': '911 Telephone Outage Emergency', 'NUW': 'Nuclear Power Plant Warning',
+    'EVI': 'Evacuation – Immediate', 'EVA': 'Evacuation Watch',
+    'HLS': 'Hurricane Local Statement',
+    'FLS': 'Flood Statement', 'DUY': 'Blowing Dust Advisory',
+}
+
+
+def _build_code_names():
+    names = dict(_EXTRA_CODE_NAMES)
+    for name, code in NWS_EVENT_TO_EEE.items():
+        names.setdefault(code, name)
+    return names
+
+
+# code → single display label, for the web custom-notification panel and docs.
+EVENT_CODE_NAMES = _build_code_names()
+
+# Ordered grouping of every selectable event code (radio SAME/extended + the
+# API/NWWS pseudo-codes). Drives the web custom-notification panel and EVENTS.md
+# so the two never drift. Each code appears in exactly one group.
+EVENT_GROUPS = [
+    ('Tornado', ['TOR', 'TOA']),
+    ('Thunderstorm & Wind', ['SVR', 'SVA', 'SVS', 'EWW', 'SQW', 'SPS',
+                             'HWW', 'HWA', 'WIY', 'LWY', 'BWY']),
+    ('Winter, Ice & Cold', ['WSW', 'WSA', 'BZW', 'BZA', 'WWY', 'ISW',
+                            'LKW', 'LKA', 'LKY', 'ZRY', 'FSW', 'BSY',
+                            'FZW', 'FZA', 'HZW', 'HZA', 'FRY', 'CWY',
+                            'WCW', 'WCY', 'WCA', 'ECW', 'ECA', 'AVW', 'AVA']),
+    ('Heat', ['EHW', 'EHA', 'HTY', 'XHW', 'XHA']),
+    ('Fog, Dust & Smoke', ['FGY', 'ZFY', 'DSW', 'DUW', 'DUY', 'SMY', 'ASY', 'AQA']),
+    ('Flood', ['FFW', 'FFA', 'FFS', 'FLW', 'FLA', 'FLS', 'CFW', 'CFA',
+               'CFY', 'CFS', 'LFW', 'LFA', 'LFY', 'LFS', 'HYY', 'DBA', 'DBW']),
+    ('Marine & Tropical', ['HUW', 'HUA', 'HLS', 'TRW', 'TRA', 'SSW', 'SSA',
+                           'TYW', 'TYA', 'TYS', 'TSW', 'TSA', 'TSY', 'SMW',
+                           'GLW', 'GLA', 'SRW', 'SRA', 'HFW', 'HFA', 'SEW', 'SEA',
+                           'SCY', 'SIY', 'RBY', 'SWY', 'MFY', 'MWS', 'LOY',
+                           'UPW', 'UPA', 'UPY', 'SUW', 'SUY', 'RPS', 'BHS']),
+    ('Fire', ['RFW', 'FWA', 'WFW', 'WFA', 'FRW', 'IFW']),
+    ('Geophysical', ['EQW', 'VOW', 'AFW', 'AFY', 'LSW']),
+    ('Civil Emergency', ['EAN', 'EAT', 'NIC', 'NMN', 'LAE', 'CEM', 'CDW', 'CAE',
+                         'EVI', 'EVA', 'LEW', 'SPW', 'BLU', 'TOE']),
+    ('Hazards & Utility', ['HMW', 'NUW', 'RHW', 'CHW', 'CWW', 'BHW', 'BWW',
+                           'DEW', 'FCW', 'POS', 'IBW']),
+    ('Tests & Administrative', ['RWT', 'RMT', 'NPT', 'NST', 'NAT', 'DMO', 'ADR']),
+]
+
+
+def event_groups_display():
+    """[(group, [[code, name], ...]), ...] for the web panel and docs."""
+    return [[g, [[c, EVENT_CODE_NAMES.get(c, c)] for c in codes]]
+            for g, codes in EVENT_GROUPS]
+
+
 # State/territory USPS abbreviation → 2-digit FIPS, for UGC↔FIPS conversion.
 STATE_ABBR_TO_FIPS = {
     'AL': '01', 'AK': '02', 'AZ': '04', 'AR': '05', 'CA': '06', 'CO': '08',

@@ -825,17 +825,7 @@ function connectSSE() {
 }
 
 // ── Web Push ──────────────────────────────────────────────────────────────────
-const EAS_GROUPS = [
-  ['Tornado',[['TOR','Tornado Warning'],['TOA','Tornado Watch'],['TOE','Tornado Emergency']]],
-  ['Severe Thunderstorm',[['SVR','Severe Thunderstorm Warning'],['SVA','Severe Thunderstorm Watch'],['SVS','Severe Weather Statement'],['EWW','Extreme Wind Warning'],['SPS','Special Weather Statement'],['SQW','Snow Squall Warning']]],
-  ['Flood',[['FFW','Flash Flood Warning'],['FFA','Flash Flood Watch'],['FFS','Flash Flood Statement'],['FLW','Flood Warning'],['FLA','Flood Watch'],['FLS','Flood Statement'],['CFW','Coastal Flood Warning'],['CFA','Coastal Flood Watch'],['DBA','Dam Break Watch'],['DBW','Dam Break Warning']]],
-  ['Tropical & Coastal',[['HUW','Hurricane Warning'],['HUA','Hurricane Watch'],['HLS','Hurricane Local Statement'],['TRW','Tropical Storm Warning'],['TRA','Tropical Storm Watch'],['TSW','Tsunami Warning'],['TSA','Tsunami Watch'],['SSW','Storm Surge Warning'],['SSA','Storm Surge Watch']]],
-  ['Winter & Wind',[['WSW','Winter Storm Warning'],['WSA','Winter Storm Watch'],['WFW','Winter Fire Weather Warning'],['WFA','Winter Fire Weather Watch'],['BZW','Blizzard Warning'],['HWW','High Wind Warning'],['HWA','High Wind Watch'],['FZW','Freeze Warning'],['FSW','Freezing Spray Warning'],['BHW','Blowing Dust Warning'],['BWW','Brisk Wind Warning'],['DSW','Dust Storm Warning']]],
-  ['Civil Emergency',[['EAN','Emergency Action Notification'],['EAT','Emergency Action Termination'],['NIC','National Information Center'],['LAE','Local Area Emergency'],['CEM','Civil Emergency Message'],['CDW','Civil Danger Warning'],['CAE','Child Abduction Emergency'],['EVI','Evacuation – Immediate'],['EVA','Evacuation Watch'],['LEW','Law Enforcement Warning'],['SPW','Shelter-in-Place Warning'],['NUW','Nuclear Power Plant Warning'],['RHW','Radiological Hazard Warning']]],
-  ['Other Hazards',[['EQW','Earthquake Warning'],['VOW','Volcano Warning'],['LSW','Landslide Warning'],['HMW','Hazardous Materials Warning'],['FRW','Fire Warning'],['IFW','Industrial Fire Warning'],['CWW','Contaminated Water Warning'],['CHW','Chemical Hazard Warning'],['IBW','Iceberg Warning'],['POS','Power Outage Statement'],['SMW','Special Marine Warning'],['ADR','Administrative Message']]],
-  ['Advisories (non-EAS)',[['EHW','Excessive Heat Warning'],['EHA','Excessive Heat Watch'],['HTY','Heat Advisory'],['ECW','Extreme Cold Warning'],['ECA','Extreme Cold Watch'],['WCW','Wind Chill Warning'],['WCY','Wind Chill Advisory'],['WWY','Winter Weather Advisory'],['WIY','Wind Advisory'],['FGY','Dense Fog Advisory'],['FRY','Frost Advisory'],['FZA','Freeze Watch'],['HZW','Hard Freeze Warning'],['HZA','Hard Freeze Watch'],['RFW','Red Flag Warning'],['FWA','Fire Weather Watch'],['DUY','Blowing Dust Advisory'],['AQA','Air Quality Alert']]],
-  ['Tests',[['RWT','Required Weekly Test'],['RMT','Required Monthly Test'],['NPT','National Periodic Test'],['NST','National Silent Test'],['NAT','National Audible Test'],['DMO','Practice Demo']]],
-];
+const EAS_GROUPS = __EVENT_GROUPS__;
 
 let _swReg = null;
 
@@ -1055,12 +1045,14 @@ if ('serviceWorker' in navigator) {
 
 @app.route('/')
 def index():
+    import config as cfg
     page = (_HTML
         .replace('__TITLE__',    _html.escape(SITE_TITLE))
         .replace('__SUBTITLE__', _html.escape(_resolved_subtitle()))
         .replace('__FOOTER__',   _html.escape(SITE_FOOTER))
         .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
         .replace('__LIVE_PLAYER__', _LIVE_PLAYER_HTML if RADIO_ENABLED else '')
+        .replace('__EVENT_GROUPS__', json.dumps(cfg.event_groups_display()))
     )
     return page, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
