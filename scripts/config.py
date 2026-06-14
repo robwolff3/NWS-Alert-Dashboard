@@ -120,7 +120,46 @@ VTEC_TO_EEE = {
     ('FZ', 'A'): 'FZA',                        # Freeze Watch (FZ.W is FZW above)
     ('HZ', 'W'): 'HZW', ('HZ', 'A'): 'HZA',   # Hard Freeze Warning / Watch
     ('FW', 'W'): 'RFW', ('FW', 'A'): 'FWA',   # Red Flag Warning / Fire Weather Watch
-    ('DU', 'Y'): 'DUY',                        # Blowing Dust Advisory
+    ('DU', 'Y'): 'DUY', ('DU', 'W'): 'DUW',   # Blowing Dust Advisory / Warning
+    ('SM', 'Y'): 'SMY', ('MS', 'Y'): 'SMY',   # Dense Smoke Advisory (land / marine)
+    # Additional non-EAS products (API/NWWS only). Pseudo-EEE = phen+sig, except
+    # where that collides with a real/extended SAME code (Lakeshore Flood would
+    # be LSW = Land Slide; Lake Effect Snow Warning would be LEW = Law
+    # Enforcement) — those use LF*/LK* instead.
+    ('FA', 'W'): 'FLW', ('FA', 'A'): 'FLA', ('FA', 'Y'): 'FLS',  # Areal Flood = Flood
+    ('CF', 'Y'): 'CFY', ('CF', 'S'): 'CFS',   # Coastal Flood Advisory / Statement
+    ('LS', 'W'): 'LFW', ('LS', 'A'): 'LFA', ('LS', 'Y'): 'LFY', ('LS', 'S'): 'LFS',  # Lakeshore Flood
+    ('LE', 'W'): 'LKW', ('LE', 'A'): 'LKA', ('LE', 'Y'): 'LKY',  # Lake Effect Snow
+    ('HY', 'Y'): 'HYY',                        # Hydrologic Advisory
+    ('BZ', 'A'): 'BZA',                        # Blizzard Watch (BZ.W is BZW above)
+    ('IS', 'W'): 'ISW',                        # Ice Storm Warning
+    ('ZR', 'Y'): 'ZRY',                        # Freezing Rain Advisory
+    ('ZF', 'Y'): 'ZFY',                        # Freezing Fog Advisory
+    ('CW', 'Y'): 'CWY',                        # Cold Weather Advisory (replaced Wind Chill Advisory)
+    ('XH', 'W'): 'XHW', ('XH', 'A'): 'XHA',   # Extreme Heat Warning / Watch (replacing Excessive Heat)
+    ('TS', 'Y'): 'TSY',                        # Tsunami Advisory (TS.W/A are TSW/TSA above)
+    ('SU', 'W'): 'SUW', ('SU', 'Y'): 'SUY',   # High Surf Warning / Advisory
+    ('RP', 'S'): 'RPS',                        # Rip Current Statement
+    ('BH', 'S'): 'BHS',                        # Beach Hazards Statement
+    ('AS', 'Y'): 'ASY',                        # Air Stagnation Advisory
+    ('AF', 'W'): 'AFW', ('AF', 'Y'): 'AFY',   # Ashfall Warning / Advisory
+    ('LW', 'Y'): 'LWY',                        # Lake Wind Advisory
+    ('BS', 'Y'): 'BSY',                        # Blowing Snow Advisory
+    # Marine
+    ('GL', 'W'): 'GLW', ('GL', 'A'): 'GLA',   # Gale Warning / Watch
+    ('SR', 'W'): 'SRW', ('SR', 'A'): 'SRA',   # Storm Warning / Watch (marine)
+    ('HF', 'W'): 'HFW', ('HF', 'A'): 'HFA',   # Hurricane Force Wind Warning / Watch
+    ('SE', 'W'): 'SEW', ('SE', 'A'): 'SEA',   # Hazardous Seas Warning / Watch
+    ('SC', 'Y'): 'SCY',                        # Small Craft Advisory
+    ('SI', 'Y'): 'SIY',                        # Small Craft Advisory for Winds
+    ('RB', 'Y'): 'RBY',                        # Small Craft Advisory for Rough Bar
+    ('SW', 'Y'): 'SWY',                        # Small Craft Advisory for Hazardous Seas
+    ('BW', 'Y'): 'BWY',                        # Brisk Wind Advisory
+    ('UP', 'W'): 'UPW', ('UP', 'A'): 'UPA', ('UP', 'Y'): 'UPY',  # (Heavy) Freezing Spray
+    ('LO', 'Y'): 'LOY',                        # Low Water Advisory
+    ('MF', 'Y'): 'MFY',                        # Marine Dense Fog Advisory
+    # Tropical
+    ('TY', 'W'): 'TYW', ('TY', 'A'): 'TYA',   # Typhoon Warning / Watch
 }
 EEE_TO_VTEC = {}
 for _pair, _eee in VTEC_TO_EEE.items():
@@ -179,8 +218,50 @@ NWS_EVENT_TO_EEE = {
     'Freeze Watch': 'FZA',
     'Hard Freeze Warning': 'HZW', 'Hard Freeze Watch': 'HZA',
     'Red Flag Warning': 'RFW', 'Fire Weather Watch': 'FWA',
-    'Blowing Dust Advisory': 'DUY',
+    'Blowing Dust Advisory': 'DUY', 'Blowing Dust Warning': 'DUW',
+    'Dust Advisory': 'DUY',
+    'Dense Smoke Advisory': 'SMY',
     'Air Quality Alert': 'AQA',
+    # Additional non-EAS products (API/NWWS only — see pseudo-codes above)
+    'Coastal Flood Advisory': 'CFY', 'Coastal Flood Statement': 'CFS',
+    'Lakeshore Flood Warning': 'LFW', 'Lakeshore Flood Watch': 'LFA',
+    'Lakeshore Flood Advisory': 'LFY', 'Lakeshore Flood Statement': 'LFS',
+    'Hydrologic Advisory': 'HYY',
+    'Blizzard Watch': 'BZA',
+    'Ice Storm Warning': 'ISW',
+    'Lake Effect Snow Warning': 'LKW', 'Lake Effect Snow Watch': 'LKA',
+    'Lake Effect Snow Advisory': 'LKY',
+    'Freezing Rain Advisory': 'ZRY',
+    'Freezing Fog Advisory': 'ZFY',
+    'Cold Weather Advisory': 'CWY',
+    'Extreme Heat Warning': 'XHW', 'Extreme Heat Watch': 'XHA',
+    'Tsunami Advisory': 'TSY',
+    'High Surf Warning': 'SUW', 'High Surf Advisory': 'SUY',
+    'Rip Current Statement': 'RPS',
+    'Beach Hazards Statement': 'BHS',
+    'Air Stagnation Advisory': 'ASY',
+    'Ashfall Warning': 'AFW', 'Ashfall Advisory': 'AFY',
+    'Lake Wind Advisory': 'LWY',
+    'Blowing Snow Advisory': 'BSY',
+    'Blue Alert': 'BLU',
+    # Marine
+    'Gale Warning': 'GLW', 'Gale Watch': 'GLA',
+    'Storm Warning': 'SRW', 'Storm Watch': 'SRA',
+    'Hurricane Force Wind Warning': 'HFW', 'Hurricane Force Wind Watch': 'HFA',
+    'Hazardous Seas Warning': 'SEW', 'Hazardous Seas Watch': 'SEA',
+    'Small Craft Advisory': 'SCY',
+    'Small Craft Advisory for Winds': 'SIY',
+    'Small Craft Advisory for Rough Bar': 'RBY',
+    'Small Craft Advisory for Hazardous Seas': 'SWY',
+    'Brisk Wind Advisory': 'BWY',
+    'Freezing Spray Advisory': 'UPY',
+    'Heavy Freezing Spray Warning': 'UPW', 'Heavy Freezing Spray Watch': 'UPA',
+    'Low Water Advisory': 'LOY',
+    'Marine Dense Fog Advisory': 'MFY',
+    'Marine Weather Statement': 'MWS',
+    # Tropical
+    'Typhoon Warning': 'TYW', 'Typhoon Watch': 'TYA',
+    'Typhoon Local Statement': 'TYS',
 }
 
 # State/territory USPS abbreviation → 2-digit FIPS, for UGC↔FIPS conversion.

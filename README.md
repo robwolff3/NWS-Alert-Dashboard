@@ -31,7 +31,7 @@ One thing to plan for in that offline case: push and web-push notifications stil
 ## Features
 
 - **Web dashboard** (PWA): live-updating (SSE) active and historical alerts with source badges (RADIO / NWWS / API), full alert text, broadcast recordings, a live radio stream, and interactive Leaflet maps served from a **local tile cache**. Light and dark themes, plus per-source health chips (tuned frequency, NWWS, API) that show at a glance when a source is down.
-- **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories (excessive heat, extreme cold, red flag, dense fog, wind, and so on) that only arrive via the API or NWWS sources. Tune the set in `FILTER_EVENT_CODES`.
+- **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories (excessive heat, extreme cold, red flag, dense fog, wind, and so on) that only arrive via the API or NWWS sources. See the full [event reference](EVENTS.md); tune the set in `FILTER_EVENT_CODES`.
 - **Alert maps**: a per-alert PNG rendered offline (Pillow over cached OSM tiles) and attached to notifications, with the storm polygon when available and county boundaries otherwise.
 - **Notifications** via [Apprise](https://github.com/caronc/apprise): ntfy (with per-event priority and topic routing), Discord, Telegram, Pushover, email, and roughly 80 other services, plus browser web-push with per-device event filters.
 - **MQTT publishing** for Home Assistant automations.
@@ -122,6 +122,10 @@ Everything is set with environment variables in `.env` (copy it from [`.env.exam
 
 See [`.env.example`](.env.example) for the complete, commented list — radio tuning, poll intervals, dedup window, map zoom/buffer, retention, and more.
 
+### Choosing which events notify
+
+`FILTER_EVENT_CODES` is an **opt-in allowlist**. Leave it blank (the default) and every event notifies; set it and only the listed event codes notify — anything else is still ingested and shown on the dashboard but stays silent. You rarely need to prune it by geography: api.weather.gov only returns alerts for the zones and county derived from your `LOCATION`, so an inland setup never receives marine or tropical alerts even with those codes left in the list. Trim it only to silence event *types* you don't want (e.g. drop the advisory-tier codes to keep just warnings). [`EVENTS.md`](EVENTS.md) lists every event code, its name, and its VTEC mapping, plus the routine informational products that are intentionally left unmapped.
+
 ## Architecture
 
 ```
@@ -185,4 +189,4 @@ Alert data comes from the **U.S. National Weather Service and NOAA**: [api.weath
 
 ## License
 
-[GNU General Public License v3.0](LICENSE)
+[GPLv3](LICENSE) © 2026 Rob Wolff <rob@borked.io>
