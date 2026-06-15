@@ -160,9 +160,18 @@ def _merge_fields(a: IncomingAlert, cand: dict, eee_in: Optional[str]) -> dict:
     if a.source in ('nwws', 'api'):
         for col in _CONTENT:
             val = incoming.get(col)
-            if val is not None and cand.get(col) and val != cand[col]:
-                fields[col] = val
-                revised.append(col)
+            if val is None or not cand.get(col) or val == cand[col]:
+                continue
+            # Geometry differing only by re-serialization (key order, float
+            # formatting) is not a real change — compare the parsed shapes.
+            if col == 'geometry':
+                try:
+                    if a.geometry == json.loads(cand['geometry']):
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            fields[col] = val
+            revised.append(col)
 
     # Rich sources upgrade a radio-generic event name ("Tornado Warning" from
     # dsame3 is fine, but NWS names are authoritative for unmapped events).
@@ -280,12 +289,17 @@ def _is_escalation(cand: dict, fields: dict) -> bool:
     return False
 
 
-def _renotify_decision(cand: dict, fields: dict, row: dict, now: float):
+def _renotify_decision(cand: dict, fields: dict, row: dict, now: float, action):
     """Whether a revision should re-notify, and whether it's an escalation.
     Gated by RENOTIFY_ON_UPDATE (off|escalation|all), the row already having
-    notified, not being expired, the event filter, and a throttle interval."""
+    notified, not being a terminating action, not expired, the event filter,
+    and a throttle interval."""
     mode = config.env('RENOTIFY_ON_UPDATE', 'escalation').strip().lower()
     if mode not in ('escalation', 'all') or not cand.get('notified_at'):
+        return False, False
+    # CAN/EXP/UPG expire the row in this same merge (expires_at = now, which the
+    # strict < check below would miss) — never re-notify a just-killed alert.
+    if action in ('CAN', 'EXP', 'UPG'):
         return False, False
     exp = row.get('expires_at')
     if exp and exp < now:
@@ -302,9 +316,12 @@ def _renotify_decision(cand: dict, fields: dict, row: dict, now: float):
     return True, escalation
 
 
-def _renotify(row: dict, escalation: bool):
-    """Send an update notification for an in-place revision (Apprise + push +
-    MQTT), attaching a freshly rendered map for the current geometry."""
+def _renotify(row: dict, escalation: bool) -> bool:
+    """Send an update notification for an in-place revision (Apprise + push),
+    attaching a freshly rendered map for the current geometry when
+    NOTIFY_MAP_ATTACH is on. Returns whether a map was sent, so the caller can
+    skip the separate late-geometry follow-up. MQTT for the merge is published
+    once by the shared merge path, not here."""
     label = '⚠ Escalated' if escalation else 'Updated'
     title = f"{label}: {row['event_name']}"
     if row.get('is_test'):
@@ -322,8 +339,8 @@ def _renotify(row: dict, escalation: bool):
         pushdb.send_push(title, body, row['priority'], row.get('eee') or '')
     except Exception as e:
         print(f'ingest: re-notify web push failed: {e}', flush=True)
-    _publish_mqtt(row, 'update')
     print(f"ingest: re-notified {row['id']} ({title})", flush=True)
+    return attach is not None
 
 
 def ingest(a: IncomingAlert) -> str:
@@ -361,7 +378,7 @@ def ingest(a: IncomingAlert) -> str:
             row = {**cand, **fields}
             do_renotify, escalation = (False, False)
             if revised:
-                do_renotify, escalation = _renotify_decision(cand, fields, row, now)
+                do_renotify, escalation = _renotify_decision(cand, fields, row, now, action)
                 if do_renotify:
                     fields['renotified_at'] = now
                     row['renotified_at'] = now
@@ -377,13 +394,14 @@ def ingest(a: IncomingAlert) -> str:
             alertdb._signal()
             _publish_mqtt(row, 'update')
 
-            # Late geometry → one-time map follow-up (only if no map went out yet
-            # and this wasn't already handled as a re-notification below).
-            if (geometry_new and cand.get('notified_at')
-                    and not cand.get('map_sent') and not do_renotify):
-                _map_followup(row)
+            renotify_mapped = False
             if do_renotify:
-                _renotify(row, escalation)
+                renotify_mapped = _renotify(row, escalation)
+            # Late geometry → one-time map follow-up, unless a map already went
+            # out (at first notify, or just now via the re-notification).
+            if (geometry_new and cand.get('notified_at')
+                    and not cand.get('map_sent') and not renotify_mapped):
+                _map_followup(row)
             return alert_id
 
         # No match → new row (unless it's a cancellation for something

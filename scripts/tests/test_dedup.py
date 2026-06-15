@@ -312,6 +312,22 @@ def test_renotify_throttled():
         del os.environ['RENOTIFY_ON_UPDATE']
 
 
+def test_cancel_with_revision_no_renotify():
+    print('CAN carrying revised text never re-notifies (terminating action)')
+    fresh_db()
+    os.environ['RENOTIFY_ON_UPDATE'] = 'all'   # most permissive; still must suppress
+    try:
+        now = time.time()
+        id1 = ing.ingest(api_tor(ts=now))
+        can = api_tor(ts=now + 300, action='CAN')
+        can.description = 'The Tornado Warning is cancelled.'
+        ing.ingest(can)
+        check('no re-notification on cancel', len(NOTIFICATIONS) == 1, NOTIFICATIONS)
+        check('row expired', alertdb.get_alert(id1)['expires_at'] <= time.time() + 1)
+    finally:
+        del os.environ['RENOTIFY_ON_UPDATE']
+
+
 if __name__ == '__main__':
     for fn in [test_radio_then_api, test_api_then_radio,
                test_nwws_then_api_then_radio, test_con_extends_no_notify,
@@ -319,7 +335,8 @@ if __name__ == '__main__':
                test_different_county_no_match, test_radio_only_offline,
                test_event_filter_silences, test_repeat_poll_idempotent,
                test_api_update_overwrites_and_records, test_escalation_renotifies,
-               test_renotify_off_suppresses, test_renotify_throttled]:
+               test_renotify_off_suppresses, test_renotify_throttled,
+               test_cancel_with_revision_no_renotify]:
         fn()
     print(f'\n{_PASS} passed, {_FAIL} failed')
     sys.exit(1 if _FAIL else 0)

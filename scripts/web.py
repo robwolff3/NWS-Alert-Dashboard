@@ -589,9 +589,14 @@ function fmtTime(ts) {
   return new Date(ts * 1000).toLocaleString();
 }
 
+// Local wall-clock h:mm, shared by the alert time range and the radar timeline.
+function fmtClock(ts) {
+  return new Date(ts * 1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+}
+
 function fmtTimeRange(alertTime, expiresAt) {
   const fmtDate = ts => new Date(ts * 1000).toLocaleDateString([], {month:'short', day:'numeric'});
-  const fmtT    = ts => new Date(ts * 1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
+  const fmtT    = fmtClock;
   const a = new Date(alertTime * 1000);
   const issued = `${fmtDate(alertTime)}, ${fmtT(alertTime)}`;
   if (!expiresAt) return issued;
@@ -794,11 +799,6 @@ function _stamp(t) {
          `${p(d.getUTCHours())}${p(d.getUTCMinutes())}`;
 }
 
-function _fmtRadarTime(t) {
-  return new Date(t * 1000).toLocaleTimeString([],
-    {hour: 'numeric', minute: '2-digit'});
-}
-
 // Build the list of 5-min frame epochs from event onset to its end. For active
 // alerts the end trails 'now' by the IEM publish latency; coarsen the step (in
 // whole 5-min multiples, so frames stay on valid IEM slots) if the count would
@@ -839,24 +839,24 @@ function radarShow(R, i) {
   R.idx = (i % R.frames.length + R.frames.length) % R.frames.length;
   const t = R.frames[R.idx];
   const cur = _radarLayer(R, t);
-  _radarLayer(R, R.frames[(R.idx + 1) % R.frames.length]);  // prefetch next frame
 
   const reveal = () => {
     Object.values(R.layers).forEach(l => { if (l !== cur) l.setOpacity(0); });
-    cur.setOpacity(RADAR.opacity || 0.75);
+    cur.setOpacity(RADAR.opacity ?? 0.75);   // ?? so a deliberate 0 is honored
   };
   // First-cycle anti-strobe: hold the prior (loaded) frame on screen until this
   // frame's tiles are actually in, then swap. Once cached, reveal is immediate.
   if (cur._radLoaded) reveal();
   else cur.once('load', () => { if (R.frames[R.idx] === t) reveal(); });
 
-  if (R.els.time)   R.els.time.textContent = _fmtRadarTime(t);
+  if (R.els.time)   R.els.time.textContent = fmtClock(t);
   if (R.els.slider) { R.els.slider.max = R.frames.length - 1; R.els.slider.value = R.idx; }
 }
 
 function radarTick(R) {
   const wasLast = R.idx === R.frames.length - 1;
   radarShow(R, R.idx + 1);
+  _radarLayer(R, R.frames[(R.idx + 1) % R.frames.length]);  // prefetch only while playing
   const delay = wasLast ? (RADAR.dwellMs || 1400) : (RADAR.frameMs || 450);
   R.timer = setTimeout(() => radarTick(R), delay);
 }
@@ -902,6 +902,15 @@ function setupRadar(id, a, map, mapEl, active) {
   radarPlay(R);
 }
 
+// Drop cached tile layers whose frame is no longer in the window (the step
+// coarsens as an active event grows, orphaning earlier stamps).
+function _pruneRadarLayers(R) {
+  const keep = new Set(R.frames.map(_stamp));
+  for (const [k, l] of Object.entries(R.layers)) {
+    if (!keep.has(k)) { try { R.map.removeLayer(l); } catch(_) {} delete R.layers[k]; }
+  }
+}
+
 // Active events: append newly published frames (~every 5 min) so the loop keeps
 // up with the storm. Expired alerts keep a fixed window and just replay.
 function radarExtend() {
@@ -911,10 +920,12 @@ function radarExtend() {
     if (f.length > R.frames.length) {
       R.frames = f;
       if (R.els.slider) R.els.slider.max = f.length - 1;
+      _pruneRadarLayers(R);
     }
   });
 }
-setInterval(radarExtend, 60000);
+// Only run the extend ticker where radar can actually appear.
+if (RADAR.enabled && RADAR.tile) setInterval(radarExtend, 60000);
 
 const _REV_LABEL = {headline: 'headline', description: 'alert text',
   instruction: 'instructions', geometry: 'warning area', severity: 'severity'};
