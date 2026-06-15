@@ -22,6 +22,7 @@ polygon) and never re-notify — except a single optional map follow-up when
 geometry arrives after the notification went out.
 """
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -41,6 +42,13 @@ POLL_NOW        = Path('/tmp/poll_now')
 _FILL_IF_NULL = ('headline', 'description', 'instruction', 'geometry',
                  'raw_product', 'severity', 'onset', 'vtec_key', 'api_id',
                  'nwws_id', 'eee')
+
+# Content a rich source (NWWS/API) may *revise* in place when NWS reissues an
+# alert. Radio never overwrites — it only fills nulls via _FILL_IF_NULL.
+_CONTENT = ('headline', 'description', 'instruction', 'geometry', 'severity')
+_SEVERITY_RANK = {'Minor': 1, 'Moderate': 2, 'Severe': 3, 'Extreme': 4}
+_ESCALATION_RE = re.compile(
+    r'tornado emergency|particularly dangerous situation', re.I)
 
 
 @dataclass
@@ -144,6 +152,27 @@ def _merge_fields(a: IncomingAlert, cand: dict, eee_in: Optional[str]) -> dict:
         if incoming.get(col) and not cand.get(col):
             fields[col] = incoming[col]
 
+    # Rich sources (NWWS/API) revise content in place when NWS reissues the
+    # alert. Only overwrite a value that was already present and actually
+    # changed — that is a true revision (a null→value fill above is mere
+    # enrichment). Radio is excluded so a sparse decode never clobbers text.
+    revised = []
+    if a.source in ('nwws', 'api'):
+        for col in _CONTENT:
+            val = incoming.get(col)
+            if val is None or not cand.get(col) or val == cand[col]:
+                continue
+            # Geometry differing only by re-serialization (key order, float
+            # formatting) is not a real change — compare the parsed shapes.
+            if col == 'geometry':
+                try:
+                    if a.geometry == json.loads(cand['geometry']):
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            fields[col] = val
+            revised.append(col)
+
     # Rich sources upgrade a radio-generic event name ("Tornado Warning" from
     # dsame3 is fine, but NWS names are authoritative for unmapped events).
     if a.source in ('nwws', 'api') and cand.get('first_source') == 'radio' \
@@ -178,7 +207,7 @@ def _merge_fields(a: IncomingAlert, cand: dict, eee_in: Optional[str]) -> dict:
         if a.expires_ts and (not cand.get('expires_at') or a.expires_ts > cand['expires_at']):
             fields['expires_at'] = a.expires_ts
 
-    return fields
+    return fields, revised
 
 
 def _render_map(alert_row: dict) -> Optional[str]:
@@ -246,6 +275,74 @@ def _map_followup(alert_row: dict):
                   attach_path=str(Path(alertdb.MAPS_DIR) / map_file))
 
 
+def _is_escalation(cand: dict, fields: dict) -> bool:
+    """A revision counts as an escalation when severity rank rises or the alert
+    newly gains 'Tornado Emergency' / 'Particularly Dangerous Situation' wording."""
+    new_sev = fields.get('severity')
+    if new_sev and _SEVERITY_RANK.get(new_sev, 0) > _SEVERITY_RANK.get(cand.get('severity'), 0):
+        return True
+    new_text = ' '.join(filter(None, (fields.get('description'), fields.get('instruction'))))
+    if new_text and _ESCALATION_RE.search(new_text):
+        old_text = ' '.join(filter(None, (cand.get('description'), cand.get('instruction'))))
+        if not _ESCALATION_RE.search(old_text or ''):
+            return True
+    return False
+
+
+def _renotify_decision(cand: dict, fields: dict, row: dict, now: float, action):
+    """Whether a revision should re-notify, and whether it's an escalation.
+    Gated by RENOTIFY_ON_UPDATE (off|escalation|all), the row already having
+    notified, not being a terminating action, not expired, the event filter,
+    and a throttle interval."""
+    mode = config.env('RENOTIFY_ON_UPDATE', 'escalation').strip().lower()
+    if mode not in ('escalation', 'all') or not cand.get('notified_at'):
+        return False, False
+    # CAN/EXP/UPG expire the row in this same merge (expires_at = now, which the
+    # strict < check below would miss) — never re-notify a just-killed alert.
+    if action in ('CAN', 'EXP', 'UPG'):
+        return False, False
+    exp = row.get('expires_at')
+    if exp and exp < now:
+        return False, False
+    events = config.filter_event_codes()
+    if events and row.get('eee') not in events and not row.get('is_test'):
+        return False, False
+    escalation = _is_escalation(cand, fields)
+    if mode == 'escalation' and not escalation:
+        return False, False
+    interval = config.env_int('RENOTIFY_MIN_INTERVAL_SECS', 600)
+    if now - (cand.get('renotified_at') or 0) < interval:
+        return False, False
+    return True, escalation
+
+
+def _renotify(row: dict, escalation: bool) -> bool:
+    """Send an update notification for an in-place revision (Apprise + push),
+    attaching a freshly rendered map for the current geometry when
+    NOTIFY_MAP_ATTACH is on. Returns whether a map was sent, so the caller can
+    skip the separate late-geometry follow-up. MQTT for the merge is published
+    once by the shared merge path, not here."""
+    label = '⚠ Escalated' if escalation else 'Updated'
+    title = f"{label}: {row['event_name']}"
+    if row.get('is_test'):
+        title = f'[TEST] {title}'
+    body = row.get('headline') or row.get('header_message') or row['event_name']
+    attach = None
+    if config.env_bool('NOTIFY_MAP_ATTACH', True):
+        map_file = _render_map(row)
+        if map_file:
+            attach = str(Path(alertdb.MAPS_DIR) / map_file)
+            alertdb.set_map_file(row['id'], map_file, map_sent=True)
+    notifier.send(title, body, row['priority'], row.get('topic') or 'nws',
+                  attach_path=attach)
+    try:
+        pushdb.send_push(title, body, row['priority'], row.get('eee') or '')
+    except Exception as e:
+        print(f'ingest: re-notify web push failed: {e}', flush=True)
+    print(f"ingest: re-notified {row['id']} ({title})", flush=True)
+    return attach is not None
+
+
 def ingest(a: IncomingAlert) -> str:
     """Dedup/merge/insert an incoming alert. Returns the canonical row id."""
     config.set_source_status(a.source, last_alert_ts=time.time())
@@ -257,12 +354,38 @@ def ingest(a: IncomingAlert) -> str:
     try:
         cand = _find_match(conn, a, eee_in)
         if cand:
-            fields = _merge_fields(a, cand, eee_in)
+            fields, revised = _merge_fields(a, cand, eee_in)
+
+            # Record a revision: snapshot the prior values, bump counters. Kept
+            # (newest-capped) for the dashboard's collapsed revision history.
+            if revised:
+                snap = {'ts': now, 'action': action, 'source': a.source}
+                for col in revised:
+                    snap[col] = cand.get(col)
+                history = []
+                if cand.get('revisions'):
+                    try:
+                        history = json.loads(cand['revisions'])
+                    except ValueError:
+                        history = []
+                history.append(snap)
+                cap = config.env_int('REVISION_HISTORY_MAX', 12)
+                fields['revisions'] = json.dumps(history[-cap:])
+                fields['updated_at'] = now
+                fields['update_count'] = (cand.get('update_count') or 0) + 1
+
             geometry_new = 'geometry' in fields
+            row = {**cand, **fields}
+            do_renotify, escalation = (False, False)
+            if revised:
+                do_renotify, escalation = _renotify_decision(cand, fields, row, now, action)
+                if do_renotify:
+                    fields['renotified_at'] = now
+                    row['renotified_at'] = now
+
             alertdb.merge_alert(conn, cand['id'], fields)
             conn.commit()
             alert_id = cand['id']
-            row = {**cand, **fields}
             print(f"ingest: {a.source} merged into {alert_id} "
                   f"({row.get('event_name')}, +{sorted(fields.keys())})", flush=True)
 
@@ -271,8 +394,13 @@ def ingest(a: IncomingAlert) -> str:
             alertdb._signal()
             _publish_mqtt(row, 'update')
 
+            renotify_mapped = False
+            if do_renotify:
+                renotify_mapped = _renotify(row, escalation)
+            # Late geometry → one-time map follow-up, unless a map already went
+            # out (at first notify, or just now via the re-notification).
             if (geometry_new and cand.get('notified_at')
-                    and not cand.get('map_sent')):
+                    and not cand.get('map_sent') and not renotify_mapped):
                 _map_followup(row)
             return alert_id
 

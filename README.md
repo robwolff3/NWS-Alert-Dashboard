@@ -30,7 +30,9 @@ One thing to plan for in that offline case: push and web-push notifications stil
 
 ## Features
 
-- **Web dashboard** (PWA): live-updating (SSE) active and historical alerts with source badges (RADIO / NWWS / API), full alert text, broadcast recordings, a live radio stream, and interactive Leaflet maps served from a **local tile cache**. Light and dark themes, plus per-source health chips (tuned frequency, NWWS, API) that show at a glance when a source is down.
+- **Web dashboard** (PWA): live-updating (SSE) active and historical alerts with source badges (RADIO / NWWS / API), full alert text, broadcast recordings, a live radio stream, searchable history, and interactive Leaflet maps served from a **local tile cache**. Light and dark themes, plus per-source health chips (tuned frequency, NWWS, API) that show at a glance when a source is down.
+- **Animated radar**: per-alert maps overlay time-correct NEXRAD radar for precip/convective events — looping across the event while it's active and replaying its timeframe afterward — with a pin marking your location. Online enrichment only; the offline notification maps are untouched.
+- **Alert updates**: in-place NWS revisions (reworded text, a tightened polygon, raised severity) update the alert and are flagged with an **UPDATED** badge and a collapsed revision history; optional re-notification on escalation (`RENOTIFY_ON_UPDATE`).
 - **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories (excessive heat, extreme cold, red flag, dense fog, wind, and so on) that only arrive via the API or NWWS sources. See the full [event reference](EVENTS.md); tune the set in `FILTER_EVENT_CODES`.
 - **Alert maps**: a per-alert PNG rendered offline (Pillow over cached OSM tiles) and attached to notifications, with the storm polygon when available and county boundaries otherwise.
 - **Notifications** via [Apprise](https://github.com/caronc/apprise): ntfy (with per-event priority and topic routing), Discord, Telegram, Pushover, email, and roughly 80 other services, plus browser web-push with per-device event filters.
@@ -117,6 +119,8 @@ Everything is set with environment variables in `.env` (copy it from [`.env.exam
 | `NOTIFY_PRIORITY_{5,4,3}_CODES` | see example | Event codes mapped to each notification priority level. |
 | `MQTT_ENABLED` | `false` | Publish alert JSON to MQTT for Home Assistant. |
 | `MAP_ENABLED` | `true` | Cache tiles/boundaries and render per-alert maps offline. |
+| `RADAR_ENABLED` | `true` | Animated NEXRAD radar overlay on dashboard maps for precip/convective alerts. |
+| `RENOTIFY_ON_UPDATE` | `escalation` | Re-notify on in-place revisions: `off`, `escalation` (severity rise / PDS wording), or `all`. |
 | `WEB_PUSH_ENABLED` | `true` | Show the browser web-push controls in the dashboard. |
 | `SITE_TITLE` / `SITE_SUBTITLE` | auto | Dashboard heading; the subtitle auto-fills from `LOCATION` when blank. |
 
@@ -137,7 +141,7 @@ web.py (Flask: SSE dashboard, Leaflet, /tiles) ←──────────
 map_cache.py (one-time: zone GeoJSON + OSM tiles → ./alerts/mapdata)
 ```
 
-Dedup: alerts carrying VTEC (NWWS, API) match on `office.phen.sig.etn.year`; radio SAME decodes match heuristically on event equivalence (SAME-to-VTEC code mapping) plus county FIPS overlap plus a `DEDUP_WINDOW_SECS` time window. The first source to land an alert claims the notification atomically; later arrivals only enrich it. A radio-first alert triggers an immediate API poll, so the headline and polygon usually merge in within seconds, and a one-time map follow-up notification fires once the polygon arrives.
+Dedup: alerts carrying VTEC (NWWS, API) match on `office.phen.sig.etn.year`; radio SAME decodes match heuristically on event equivalence (SAME-to-VTEC code mapping) plus county FIPS overlap plus a `DEDUP_WINDOW_SECS` time window. The first source to land an alert claims the notification atomically; later arrivals enrich missing fields (radio never overwrites richer text). When NWS reissues an alert in place — reworded text, a tightened polygon, raised severity — the rich sources overwrite the changed content, keep prior versions as a revision history, and optionally re-notify on escalation (`RENOTIFY_ON_UPDATE`). A radio-first alert triggers an immediate API poll, so the headline and polygon usually merge in within seconds, and a one-time map follow-up notification fires once the polygon arrives.
 
 ## Testing
 
