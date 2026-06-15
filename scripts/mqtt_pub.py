@@ -57,6 +57,41 @@ def _client():
     return client
 
 
+_last_active_sig = None
+
+
+def publish_active(force: bool = False):
+    """Refresh only the retained {topic}/active summary (no per-alert event).
+
+    publish() only runs on a new/updated alert, so once the last alert expires
+    with nothing new arriving, the retained topic would advertise a stale active
+    warning forever. The API poller calls this each cycle; change-detection
+    (active id+expiry signature) avoids reconnecting when nothing changed."""
+    global _last_active_sig
+    if not config.env_bool('MQTT_ENABLED', False):
+        return
+    now = time.time()
+    rows = [r for r in alertdb.get_alerts(100)
+            if r.get('expires_at') and r['expires_at'] > now and not r.get('is_test')]
+    sig = tuple(sorted((r['id'], round(r['expires_at'])) for r in rows))
+    if not force and sig == _last_active_sig:
+        return
+    _last_active_sig = sig
+    topic = config.env('MQTT_TOPIC', 'nws-alerts').rstrip('/')
+    active = [_row_payload(r, 'active') for r in rows]
+    client = _client()
+    try:
+        client.loop_start()
+        client.publish(f'{topic}/active',
+                       json.dumps({'count': len(active), 'alerts': active,
+                                   'updated': now}),
+                       qos=1, retain=True).wait_for_publish(10)
+        print(f'mqtt: refreshed active summary ({len(active)} active)', flush=True)
+    finally:
+        client.loop_stop()
+        client.disconnect()
+
+
 def publish(row: dict, kind: str):
     """Publish one alert event + refresh the retained active summary."""
     topic = config.env('MQTT_TOPIC', 'nws-alerts').rstrip('/')

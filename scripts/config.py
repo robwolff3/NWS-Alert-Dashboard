@@ -10,6 +10,7 @@ Env vars are organized by source prefix (RADIO_*, NWWS_*, API_*) plus
 cross-source groups (FILTER_*, NOTIFY_*, MQTT_*, MAP_*). Old pre-rearchitecture
 names are detected at import and warned about — there are no compat shims.
 """
+import fcntl
 import json
 import os
 import tempfile
@@ -415,18 +416,28 @@ def get_source_status() -> dict:
 
 
 def set_source_status(source: str, **fields):
-    """Merge fields into the named source's status entry (atomic write)."""
-    status = get_source_status()
-    entry = status.setdefault(source, {})
-    entry.update(fields)
-    entry['updated'] = time.time()
-    fd, tmp = tempfile.mkstemp(dir='/tmp', prefix='srcstat.')
-    try:
-        with os.fdopen(fd, 'w') as f:
-            json.dump(status, f)
-        os.replace(tmp, SOURCE_STATUS_PATH)
-    except OSError:
+    """Merge fields into the named source's status entry (atomic write).
+
+    The web/api/nwws daemons are separate processes that all update this file;
+    an flock serializes the read-modify-write so one process can't clobber
+    another source's entry with a stale snapshot. (Readers need no lock — the
+    os.replace below is atomic, so they see a complete old or new file.)"""
+    with open(SOURCE_STATUS_PATH + '.lock', 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            os.unlink(tmp)
-        except OSError:
-            pass
+            status = get_source_status()
+            entry = status.setdefault(source, {})
+            entry.update(fields)
+            entry['updated'] = time.time()
+            fd, tmp = tempfile.mkstemp(dir='/tmp', prefix='srcstat.')
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(status, f)
+                os.replace(tmp, SOURCE_STATUS_PATH)
+            except OSError:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)

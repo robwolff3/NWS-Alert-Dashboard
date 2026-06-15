@@ -119,7 +119,9 @@ def _find_match(conn, a: IncomingAlert, eee_in: Optional[str]) -> Optional[dict]
             return row
     window = config.env_int('DEDUP_WINDOW_SECS', 600)
     in_key = a.vtec.get('key') if a.vtec else None
-    for cand in alertdb.find_candidates(conn, time.time()):
+    # Candidate lookback must cover the dedup window so a configured window
+    # larger than the default 1800s isn't silently capped.
+    for cand in alertdb.find_candidates(conn, time.time(), max(1800, window)):
         if bool(cand.get('is_test')) != a.is_test:
             continue
         # Distinct VTEC events are distinct alerts, period (new ETN = new warning)

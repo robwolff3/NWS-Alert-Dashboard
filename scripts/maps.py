@@ -28,6 +28,11 @@ import alerts as alertdb
 
 TILE_SIZE = 256
 
+# Cap how many pixels Pillow will decode from a cached tile, so a maliciously
+# crafted (huge-dimension) PNG in the tile cache can't trigger a memory-bomb
+# expansion during compositing. ~32 MP comfortably covers our largest viewport.
+Image.MAX_IMAGE_PIXELS = 32 * 1024 * 1024
+
 PRIORITY_COLORS = {
     5: (220, 38, 38),    # red
     4: (234, 88, 12),    # orange
@@ -178,8 +183,10 @@ def _font(size):
 
 def render_alert_map(alert_row: dict):
     """Render the map PNG for an alert row. Returns filename or None."""
-    width  = config.env_int('MAP_WIDTH', 900)
-    height = config.env_int('MAP_HEIGHT', 600)
+    # Clamp to a sane range so a misconfigured MAP_WIDTH/HEIGHT can't make
+    # Image.new allocate tens of GB and OOM-kill the renderer on every alert.
+    width  = max(200, min(config.env_int('MAP_WIDTH', 900), 4000))
+    height = max(200, min(config.env_int('MAP_HEIGHT', 600), 4000))
 
     # Pick the alert geometry: storm polygon, else county boundaries
     alert_geoms = []

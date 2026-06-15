@@ -15,6 +15,7 @@ window into a single WAV stored against the alert row. No transcription —
 the NOAA REST API supplies the alert text when the internet is up; offline,
 the recording itself is the record.
 """
+import calendar
 import os
 import subprocess
 import sys
@@ -52,7 +53,7 @@ def find_segments(window_start: float, window_end: float) -> list:
     found = []
     for f in sorted(recordings.glob('seg_*.wav')):
         try:
-            ts      = time.mktime(time.strptime(f.stem[4:19], '%Y%m%d_%H%M%S'))
+            ts      = calendar.timegm(time.strptime(f.stem[4:19], '%Y%m%d_%H%M%S'))
             seg_end = ts + 60
             if seg_end >= window_start and ts <= window_end:
                 found.append(f)
@@ -116,7 +117,7 @@ def main():
         return
 
     # Trim the merged audio to [record_start, eos_time] using sox
-    first_seg_ts = time.mktime(time.strptime(segments[0].stem[4:19], '%Y%m%d_%H%M%S'))
+    first_seg_ts = calendar.timegm(time.strptime(segments[0].stem[4:19], '%Y%m%d_%H%M%S'))
     trim_start   = max(0.0, record_start - first_seg_ts)
     trim_dur     = max(0.0, eos_time - record_start)
     # If the window is implausibly short, skip trimming and use everything

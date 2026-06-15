@@ -66,6 +66,14 @@ def main():
             print(f'api_poller: poll failed: {e}', flush=True)
             config.set_source_status('api', enabled=True, last_error=str(e))
 
+        # Refresh the retained MQTT active summary so it clears when alerts
+        # expire with no new event (no-op unless MQTT is enabled / changed).
+        try:
+            import mqtt_pub
+            mqtt_pub.publish_active()
+        except Exception as e:
+            print(f'api_poller: mqtt active refresh failed: {e}', flush=True)
+
         interval = (config.env_int('API_POLL_SECS', 120) if nwws_healthy()
                     else config.env_int('API_POLL_SECS_DEGRADED', 30))
 

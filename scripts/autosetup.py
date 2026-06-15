@@ -20,6 +20,8 @@ Results go to /alerts/derived_config.json (shown in the UI) and to
 Explicit env vars always win — this never overrides anything.
 """
 import json
+import os
+import shlex
 import sys
 import time
 
@@ -127,9 +129,16 @@ def main():
                 except (OSError, ValueError):
                     derived = {}
 
+    # run.sh sources this file, so shell-quote each value (defense-in-depth: a
+    # derived value should never contain metacharacters, but never `eval` an
+    # unquoted API-derived string). Lock perms — /tmp is world-writable.
     with open(DERIVED_ENV, 'w') as f:
         for k, v in derived.items():
-            f.write(f'export {k}="{v}"\n')
+            f.write(f'export {k}={shlex.quote(str(v))}\n')
+    try:
+        os.chmod(DERIVED_ENV, 0o600)
+    except OSError:
+        pass
 
 
 if __name__ == '__main__':

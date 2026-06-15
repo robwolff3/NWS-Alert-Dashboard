@@ -41,9 +41,9 @@ def base_url():
     return config.env('API_BASE_URL', 'https://api.weather.gov').rstrip('/')
 
 
-def parse_vtec(vtec_str: str):
+def parse_vtec(vtec_str: str, issue_ts=None):
     """P-VTEC string → dict (delegates to the shared parser in nwws_parse)."""
-    out = nwws_parse.parse_vtec(vtec_str)
+    out = nwws_parse.parse_vtec(vtec_str, issue_ts)
     return out[0] if out else None
 
 
@@ -60,9 +60,10 @@ def feature_to_incoming(feature: dict) -> IncomingAlert:
     p = feature.get('properties', {})
     params = p.get('parameters', {})
 
+    sent_ts = _iso_ts(p.get('sent'))
     vtec = None
     for v in params.get('VTEC', []):
-        vtec = parse_vtec(v)
+        vtec = parse_vtec(v, sent_ts)
         if vtec:
             break
     if vtec is None and p.get('messageType') == 'Cancel':
@@ -76,7 +77,7 @@ def feature_to_incoming(feature: dict) -> IncomingAlert:
     return IncomingAlert(
         source='api',
         event_name=p.get('event') or 'Unknown Event',
-        issue_ts=_iso_ts(p.get('sent')) or time.time(),
+        issue_ts=sent_ts or time.time(),
         eee=config.NWS_EVENT_TO_EEE.get(p.get('event', '')),
         vtec=vtec,
         native_id=p.get('id') or feature.get('id'),
