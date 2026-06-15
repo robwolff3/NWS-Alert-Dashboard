@@ -223,9 +223,11 @@ def run_xmpp():
             print(f'nwws: connection error: {e}', flush=True)
         finally:
             # Tear the bot down so sockets/handlers don't accumulate across the
-            # routine reconnect cycle (NWWS connections die silently).
+            # routine reconnect cycle (NWWS connections die silently). disconnect()
+            # only schedules a coroutine, so drive it through the loop — otherwise
+            # the loop is already stopped here and the teardown never runs.
             try:
-                bot.disconnect()
+                bot.loop.run_until_complete(bot.disconnect())
             except Exception:
                 pass
         config.set_source_status('nwws', connected=False)
