@@ -33,7 +33,7 @@ One thing to plan for in that offline case: push and web-push notifications stil
 - **Web dashboard** (PWA): live-updating (SSE) active and historical alerts with source badges (RADIO / NWWS / API), full alert text, broadcast recordings, a live radio stream, searchable history, and interactive Leaflet maps served from a **local tile cache**. Light and dark themes, plus per-source health chips (tuned frequency, NWWS, API) that show at a glance when a source is down.
 - **Animated radar**: per-alert maps overlay time-correct NEXRAD radar for precip/convective events — looping across the event while it's active and replaying its timeframe afterward — with a pin marking your location. Online enrichment only; the offline notification maps are untouched.
 - **Alert updates**: in-place NWS revisions (reworded text, a tightened polygon, raised severity) update the alert and are flagged with an **UPDATED** badge and a collapsed revision history; optional re-notification on escalation (`RENOTIFY_ON_UPDATE`).
-- **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories (excessive heat, extreme cold, red flag, dense fog, wind, and so on) that only arrive via the API or NWWS sources. See the full [event reference](EVENTS.md); tune the set in `FILTER_EVENT_CODES`.
+- **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories (excessive heat, extreme cold, red flag, dense fog, wind, and so on) that only arrive via the API or NWWS sources. See the full [event reference](EVENTS.md); tune the set in `NOTIFY_EVENT_CODES`.
 - **Alert maps**: a per-alert PNG rendered offline (Pillow over cached OSM tiles) and attached to notifications, with the storm polygon when available and county boundaries otherwise.
 - **Notifications** via [Apprise](https://github.com/caronc/apprise): ntfy (with per-event priority and topic routing), Discord, Telegram, Pushover, email, and roughly 80 other services, plus browser web-push with per-device event filters.
 - **MQTT publishing** for Home Assistant automations.
@@ -111,7 +111,7 @@ Everything is set with environment variables in `.env` (copy it from [`.env.exam
 | `API_USER_AGENT` | — | Contact string required by api.weather.gov; put your email here. |
 | `FILTER_SAME_CODES` | from `LOCATION` | County SAME codes to watch (space-separated `PSSCCC`). |
 | `FILTER_ZONES` | from `LOCATION` | UGC forecast zones for zone-based products (winter storms, etc.). |
-| `FILTER_EVENT_CODES` | all | Event codes allowed to notify; others are stored but stay silent. |
+| `NOTIFY_EVENT_CODES` | all | Event codes allowed to notify; others are stored but stay silent. |
 | `RTL_DEVICE` | — | RTL-SDR USB device path (radio only; also set in `compose.override.yaml`). |
 | `RADIO_FREQUENCY` | scan | NWR frequency in MHz; blank scans all seven channels. |
 | `NTFY_URL` / `NTFY_USER` / `NTFY_PASS` | — | ntfy server shortcut with per-priority topic routing. |
@@ -128,7 +128,7 @@ See [`.env.example`](.env.example) for the complete, commented list — radio tu
 
 ### Choosing which events notify
 
-`FILTER_EVENT_CODES` is an **opt-in allowlist**. Leave it blank (the default) and every event notifies; set it and only the listed event codes notify — anything else is still ingested and shown on the dashboard but stays silent. You rarely need to prune it by geography: api.weather.gov only returns alerts for the zones and county derived from your `LOCATION`, so an inland setup never receives marine or tropical alerts even with those codes left in the list. Trim it only to silence event *types* you don't want (e.g. drop the advisory-tier codes to keep just warnings). [`EVENTS.md`](EVENTS.md) lists every event code, its name, and its VTEC mapping, plus the routine informational products that are intentionally left unmapped.
+`NOTIFY_EVENT_CODES` is an **opt-in allowlist**. Leave it blank (the default) and every event notifies; set it and only the listed event codes notify — anything else is still ingested and shown on the dashboard but stays silent. You rarely need to prune it by geography: api.weather.gov only returns alerts for the zones and county derived from your `LOCATION`, so an inland setup never receives marine or tropical alerts even with those codes left in the list. Trim it only to silence event *types* you don't want (e.g. drop the advisory-tier codes to keep just warnings). [`EVENTS.md`](EVENTS.md) lists every event code, its name, and its VTEC mapping, plus the routine informational products that are intentionally left unmapped.
 
 ## Architecture
 

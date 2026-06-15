@@ -4,7 +4,7 @@ The full catalog of alert events the dashboard understands, generated from the
 tables in [`scripts/config.py`](scripts/config.py) (`EVENT_GROUPS` /
 `EVENT_CODE_NAMES`). The same data drives the **custom notification** picker in
 the web dashboard, so this page and that picker never disagree. Use it to decide
-what to put in `FILTER_EVENT_CODES`, the `NOTIFY_PRIORITY_*_CODES` lists, or a
+what to put in `NOTIFY_EVENT_CODES`, the `NOTIFY_PRIORITY_*_CODES` lists, or a
 per-device custom push subscription.
 
 ## How events are coded
@@ -30,7 +30,7 @@ is Land Slide Warning in the decoder's extended set).
 
 ## What to do with these
 
-`FILTER_EVENT_CODES` is an **opt-in allowlist**:
+`NOTIFY_EVENT_CODES` is an **opt-in allowlist**:
 
 - **Blank (the default) = accept everything.** Every event below notifies.
 - **Non-blank = only the listed codes notify.** Any event *not* in your list is
@@ -43,7 +43,7 @@ alerts for the **zones and county you configured** (`FILTER_ZONES` /
 `FILTER_SAME_CODES`, both auto-derived from `LOCATION`). An inland location
 never receives a Small Craft Advisory or Storm Surge Warning, so leaving the
 marine and tropical codes in your allowlist costs nothing. Trim
-`FILTER_EVENT_CODES` only to silence event *types* you don't care about (for
+`NOTIFY_EVENT_CODES` only to silence event *types* you don't care about (for
 example, dropping the advisory-tier codes if you only want warnings).
 
 Two independent layers sit on top:
@@ -273,7 +273,7 @@ See [`.env.example`](.env.example) for the shipped defaults.
 
 These api.weather.gov products are issued routinely and carry no actionable
 hazard, so they have no event code and are not routed for notification. They
-are dropped under any non-blank `FILTER_EVENT_CODES`. Add a mapping in
+are dropped under any non-blank `NOTIFY_EVENT_CODES`. Add a mapping in
 `scripts/config.py` if you want one of them promoted to a notifying event.
 
 | Product | VTEC / code | What it is |

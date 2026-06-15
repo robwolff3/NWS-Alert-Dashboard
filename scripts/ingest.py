@@ -306,7 +306,7 @@ def _renotify_decision(cand: dict, fields: dict, row: dict, now: float, action):
     exp = row.get('expires_at')
     if exp and exp < now:
         return False, False
-    events = config.filter_event_codes()
+    events = config.notify_event_codes()
     if events and row.get('eee') not in events and not row.get('is_test'):
         return False, False
     escalation = _is_escalation(cand, fields)
@@ -448,7 +448,7 @@ def ingest(a: IncomingAlert) -> str:
         # Decide whether to notify (filters), then claim atomically.
         # Unmapped events (eee None) count as filtered when a filter is set —
         # otherwise minor non-EAS products (e.g. Beach Hazards) would notify.
-        events = config.filter_event_codes()
+        events = config.notify_event_codes()
         filtered = bool(events) and eee_in not in events and not a.is_test
         expired  = a.expires_ts is not None and a.expires_ts < now
         should_notify = not filtered and not expired

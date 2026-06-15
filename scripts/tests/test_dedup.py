@@ -204,9 +204,9 @@ def test_radio_only_offline():
 
 
 def test_event_filter_silences():
-    print('FILTER_EVENT_CODES suppresses notification but stores row')
+    print('NOTIFY_EVENT_CODES suppresses notification but stores row')
     fresh_db()
-    os.environ['FILTER_EVENT_CODES'] = 'SVR FFW'
+    os.environ['NOTIFY_EVENT_CODES'] = 'SVR FFW'
     try:
         id1 = ing.ingest(radio_tor())
         row = alertdb.get_alert(id1)
@@ -214,7 +214,7 @@ def test_event_filter_silences():
         check('not notified', not row['notified_at'])
         check('no notification sent', len(NOTIFICATIONS) == 0)
     finally:
-        del os.environ['FILTER_EVENT_CODES']
+        del os.environ['NOTIFY_EVENT_CODES']
 
 
 def test_repeat_poll_idempotent():
