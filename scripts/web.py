@@ -113,9 +113,9 @@ def _radar_cfg():
     except (OSError, ValueError, TypeError):
         pass
     try:
-        opacity = float(cfg.env('RADAR_OPACITY', '0.75'))
+        opacity = float(cfg.env('RADAR_OPACITY', '0.55'))
     except ValueError:
-        opacity = 0.75
+        opacity = 0.55
     return {
         'enabled':    cfg.env_bool('RADAR_ENABLED', True),
         'home':       home,
