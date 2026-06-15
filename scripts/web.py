@@ -1497,7 +1497,7 @@ def index():
 
 @app.route('/manifest.json')
 def manifest():
-    return Response(json.dumps(_manifest(request.script_root)),
+    return Response(json.dumps(_manifest(_base_prefix())),
                     mimetype='application/manifest+json',
                     headers={'Cache-Control': 'no-cache'})
 

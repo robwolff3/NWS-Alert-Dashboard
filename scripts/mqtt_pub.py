@@ -60,6 +60,17 @@ def _client():
 _last_active_sig = None
 
 
+def _active_rows(now: float):
+    """Unexpired, non-test alert rows that belong in the /active summary."""
+    return [r for r in alertdb.get_alerts(100)
+            if r.get('expires_at') and r['expires_at'] > now and not r.get('is_test')]
+
+
+def _active_sig(rows) -> tuple:
+    """Change-detection signature for an active set (ids + rounded expiries)."""
+    return tuple(sorted((r['id'], round(r['expires_at'])) for r in rows))
+
+
 def publish_active(force: bool = False):
     """Refresh only the retained {topic}/active summary (no per-alert event).
 
@@ -71,9 +82,8 @@ def publish_active(force: bool = False):
     if not config.env_bool('MQTT_ENABLED', False):
         return
     now = time.time()
-    rows = [r for r in alertdb.get_alerts(100)
-            if r.get('expires_at') and r['expires_at'] > now and not r.get('is_test')]
-    sig = tuple(sorted((r['id'], round(r['expires_at'])) for r in rows))
+    rows = _active_rows(now)
+    sig = _active_sig(rows)
     if not force and sig == _last_active_sig:
         return
     _last_active_sig = sig
@@ -94,12 +104,11 @@ def publish_active(force: bool = False):
 
 def publish(row: dict, kind: str):
     """Publish one alert event + refresh the retained active summary."""
+    global _last_active_sig
     topic = config.env('MQTT_TOPIC', 'nws-alerts').rstrip('/')
     now = time.time()
-    active = [
-        _row_payload(r, 'active') for r in alertdb.get_alerts(100)
-        if r.get('expires_at') and r['expires_at'] > now and not r.get('is_test')
-    ]
+    rows = _active_rows(now)
+    active = [_row_payload(r, 'active') for r in rows]
     client = _client()
     try:
         client.loop_start()
@@ -109,6 +118,9 @@ def publish(row: dict, kind: str):
                        json.dumps({'count': len(active), 'alerts': active,
                                    'updated': now}),
                        qos=1, retain=True).wait_for_publish(10)
+        # We just refreshed /active — record the signature so the poller's next
+        # publish_active() doesn't re-send an identical retained summary.
+        _last_active_sig = _active_sig(rows)
         print(f"mqtt: published {kind} for {row.get('id')} "
               f'({len(active)} active)', flush=True)
     finally:
