@@ -47,14 +47,23 @@ def vtec_ts(s: str):
     return dt.timestamp()
 
 
-def parse_vtec(text: str) -> list:
-    """All P-VTEC strings in text → list of dicts (action/office/.../key)."""
+def parse_vtec(text: str, issue_ts: float = None) -> list:
+    """All P-VTEC strings in text → list of dicts (action/office/.../key).
+
+    The dedup-key year uses the product *issuance* year when known: it is the
+    same for every message in an event series (NEW + later CON/EXT/CAN), so the
+    key stays stable. Continuation messages carry a null begin time, so the old
+    begin/end fallback could derive next year for a warning whose expiry crosses
+    midnight on Dec 31 — splitting one event into two rows. Issuance year avoids
+    that for the common case (all messages issued the same side of midnight)."""
+    ref_year = (datetime.datetime.fromtimestamp(issue_ts, datetime.timezone.utc).year
+                if issue_ts else None)
     out = []
     for m in VTEC_RE.finditer(text):
         _cls, action, office, phen, sig, etn, begin, end = m.groups()
         begin_ts = vtec_ts(begin)
         end_ts   = vtec_ts(end)
-        year = datetime.datetime.fromtimestamp(
+        year = ref_year if ref_year is not None else datetime.datetime.fromtimestamp(
             begin_ts or end_ts or datetime.datetime.now().timestamp(),
             datetime.timezone.utc).year
         out.append({
@@ -168,10 +177,11 @@ def parse_latlon(text: str):
     return {'type': 'Polygon', 'coordinates': [coords]}
 
 
-def split_segments(text: str) -> list:
+def split_segments(text: str, issue_ts: float = None) -> list:
     """Product → list of segment dicts: {ugc, purge, vtec(list), text}.
 
     A segment starts at a UGC line and ends at '$$' (or product end).
+    issue_ts (product issuance epoch) anchors the VTEC dedup-key year.
     """
     lines = text.split('\n')
     segments = []
@@ -200,7 +210,7 @@ def split_segments(text: str) -> list:
             segments.append({
                 'ugc': ugc,
                 'purge': purge,
-                'vtec': parse_vtec(seg_text),
+                'vtec': parse_vtec(seg_text, issue_ts),
                 'text': seg_text,
             })
             i = end + 1

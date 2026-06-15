@@ -13,6 +13,8 @@ non-fatal — the renderer degrades gracefully without tiles/geometry.
 """
 import json
 import math
+import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -24,6 +26,10 @@ import config
 
 TILE_SIZE = 256
 TILE_DELAY = 0.5          # ≥2 req/s is impolite per OSM tile usage policy
+PNG_MAGIC = b'\x89PNG\r\n\x1a\n'
+# UGC zone id (e.g. MIC163 / MIZ076) — used to keep an API/config-supplied id
+# from carrying path separators into the cache directory.
+_ZONE_ID_RE = re.compile(r'^[A-Z]{2}[CZ]\d{3}$')
 
 
 def cache_dir() -> Path:
@@ -73,6 +79,11 @@ def _bbox_intersects(a, b):
 
 
 def fetch_zone(sess, zone_type, zone_id, zdir):
+    # zone_id flows in from the NWS API listing and from env (API_ZONES etc.);
+    # reject anything that isn't a plain UGC so it can't escape the cache dir.
+    if not _ZONE_ID_RE.match(zone_id or ''):
+        print(f'map_cache: skipping invalid zone id {zone_id!r}', flush=True)
+        return None
     out = zdir / f'{zone_id}.geojson'
     if out.exists():
         try:
@@ -198,7 +209,14 @@ def cache_tiles(sess, bbox):
                 try:
                     r = sess.get(url_tpl.format(z=z, x=x, y=y), timeout=20)
                     r.raise_for_status()
-                    out.write_bytes(r.content)
+                    # A 200 can still carry a CDN error/rate-limit HTML body;
+                    # only commit real PNGs, and write atomically so a killed
+                    # process can't leave a truncated tile that's skipped forever.
+                    if not r.content.startswith(PNG_MAGIC):
+                        raise ValueError('non-PNG tile response')
+                    tmp = out.with_name(out.name + '.tmp')
+                    tmp.write_bytes(r.content)
+                    os.replace(tmp, out)
                     fetched += 1
                 except Exception as e:
                     failed += 1

@@ -49,12 +49,23 @@ def init_push():
 
 def _ensure_keys():
     if PRIV_KEY.exists() and PUB_KEY.exists():
+        try:
+            if (PRIV_KEY.stat().st_mode & 0o077):   # tighten a pre-existing key
+                os.chmod(PRIV_KEY, 0o600)
+        except OSError:
+            pass
         return
     from py_vapid import Vapid
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     v = Vapid()
     v.generate_keys()
     v.save_key(str(PRIV_KEY))
+    # Private key lives in the shared /alerts volume — lock it to the owner so
+    # other containers/host users on that mount can't forge push to subscribers.
+    try:
+        os.chmod(PRIV_KEY, 0o600)
+    except OSError as e:
+        print(f'push: could not chmod VAPID key: {e}', flush=True)
     pub = v.public_key.public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
     PUB_KEY.write_text(base64.urlsafe_b64encode(pub).rstrip(b'=').decode())
     print('push: VAPID keys generated', flush=True)
@@ -140,7 +151,7 @@ def send_push(title: str, body: str, priority: int, eee: str = ''):
         except WebPushException as e:
             status = e.response.status_code if e.response is not None else None
             print(f'push: WebPushException ({status}): {e}', flush=True)
-            if status == 410:  # subscription expired/gone
+            if status in (404, 410):  # endpoint gone (RFC 8030) — drop it
                 delete_subscription(sub['endpoint'])
         except Exception as e:
             print(f'push: error: {e}', flush=True)

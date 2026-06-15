@@ -17,26 +17,31 @@ while true; do
     [ -z "${UPTIME_PUSH_URL:-}" ] && continue
 
     STATUS="down"
-    MSG="no+signal"
+    MSG="no signal"
 
     if [ "${RADIO_ENABLED:-true}" = "true" ]; then
         if find /recordings -name "*.wav" -newer /tmp/hb_ref | grep -q .; then
             STATUS="up"
-            MSG="recording+active"
+            MSG="recording active"
         else
-            MSG="no+new+recordings"
+            MSG="no new recordings"
         fi
     else
         # Healthy if any source updated its status in the last 10 minutes
         if [ -f /tmp/source_status.json ] && \
            [ -n "$(find /tmp/source_status.json -mmin -10)" ]; then
             STATUS="up"
-            MSG="sources+active"
+            MSG="sources active"
         else
-            MSG="sources+stale"
+            MSG="sources stale"
         fi
     fi
     touch /tmp/hb_ref
 
-    curl -sf "${UPTIME_PUSH_URL}?status=${STATUS}&msg=${MSG}&ping=" >/dev/null 2>&1 || true
+    # -G + --data-urlencode so values are properly encoded and appended whether
+    # or not UPTIME_PUSH_URL already carries a query string.
+    curl -sf -G "${UPTIME_PUSH_URL}" \
+        --data-urlencode "status=${STATUS}" \
+        --data-urlencode "msg=${MSG}" \
+        --data-urlencode "ping=" >/dev/null 2>&1 || true
 done

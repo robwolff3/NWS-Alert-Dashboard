@@ -102,6 +102,7 @@ fi
 
 [ -f "$DECODE_SENTINEL" ] || touch "$DECODE_SENTINEL"
 FREQ_SWITCHED_AT=$(date +%s)
+RADIO_BACKOFF=5   # grows when the pipeline dies fast (e.g. SDR unplugged)
 
 while true; do
     if [ "${#FREQUENCIES[@]}" -gt 1 ]; then
@@ -126,6 +127,7 @@ while true; do
     CURRENT_FREQ="${FREQUENCIES[$FREQ_IDX]}"
     echo "Tuning to ${CURRENT_FREQ}MHz"
     echo "${CURRENT_FREQ}" > /tmp/current_freq
+    RUN_START=$(date +%s)
 
     # recorder.py sits between rtl_fm and multimon-ng:
     # passes audio through to stdout and saves rolling WAV segments to /recordings
@@ -141,6 +143,17 @@ while true; do
             --command "{ORG}" "{EEE}" "{PSSCCC}" "{TTTT}" "{JJJHHMM}" "{LLLLLLLL}" "{event}" "{MESSAGE}" \
         || true
 
-    echo "Pipeline exited — restarting in 5s..."
-    sleep 5
+    # A pipeline that ran a while was healthy → reset backoff; one that died
+    # fast (no SDR, device busy) backs off exponentially up to 5 min so we don't
+    # hot-loop and hammer the USB subsystem / spam logs.
+    RAN=$(( $(date +%s) - RUN_START ))
+    if [ "$RAN" -ge 60 ]; then
+        RADIO_BACKOFF=5
+    fi
+    echo "Pipeline exited after ${RAN}s — restarting in ${RADIO_BACKOFF}s..."
+    sleep "$RADIO_BACKOFF"
+    if [ "$RAN" -lt 60 ]; then
+        RADIO_BACKOFF=$(( RADIO_BACKOFF * 2 ))
+        [ "$RADIO_BACKOFF" -gt 300 ] && RADIO_BACKOFF=300
+    fi
 done

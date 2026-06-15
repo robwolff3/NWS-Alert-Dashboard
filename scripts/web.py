@@ -10,6 +10,7 @@ sys.path.insert(0, '/app/scripts')
 
 import json
 import os
+import re
 import struct
 import threading
 import time
@@ -1128,7 +1129,8 @@ async function sendTestAlert(btn) {
   btn.disabled = true;
   btn.textContent = 'Sending…';
   try {
-    const r = await fetch(APP_BASE + '/api/test-alert', {method: 'POST'});
+    const r = await fetch(APP_BASE + '/api/test-alert',
+      {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
     btn.textContent = r.ok ? 'Test sent ✓' : 'Failed';
   } catch(_) {
     btn.textContent = 'Failed';
@@ -1443,6 +1445,20 @@ if ('serviceWorker' in navigator) {
 """
 
 
+def _base_prefix():
+    """The reverse-proxy mount prefix (request.script_root) is injected raw into
+    HTML/JS; restrict it to URL-path-safe characters so a spoofed
+    X-Forwarded-Prefix (under TRUST_PROXY) cannot break out of the <script>
+    string or an attribute."""
+    return re.sub(r'[^A-Za-z0-9/_-]', '', request.script_root or '')
+
+
+def _json_for_script(obj):
+    """json.dumps for embedding inside an inline <script>; neutralizes a literal
+    </script> (and <!--) so a config value can't terminate the script element."""
+    return json.dumps(obj).replace('</', '<\\/').replace('<!--', '<\\!--')
+
+
 @app.route('/')
 def index():
     import config as cfg
@@ -1452,9 +1468,9 @@ def index():
         .replace('__FOOTER__',   _html.escape(SITE_FOOTER))
         .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
         .replace('__LIVE_PLAYER__', _LIVE_PLAYER_HTML if RADIO_ENABLED else '')
-        .replace('__EVENT_GROUPS__', json.dumps(cfg.event_groups_display()))
-        .replace('__RADAR_CFG__', json.dumps(_radar_cfg()))
-        .replace('__BASE__', request.script_root)
+        .replace('__EVENT_GROUPS__', _json_for_script(cfg.event_groups_display()))
+        .replace('__RADAR_CFG__', _json_for_script(_radar_cfg()))
+        .replace('__BASE__', _base_prefix())
     )
     return page, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
@@ -1469,7 +1485,7 @@ def manifest():
 
 @app.route('/sw.js')
 def service_worker():
-    body = _SW.replace('__BASE__', request.script_root)
+    body = _SW.replace('__BASE__', _base_prefix())
     return Response(body, mimetype='application/javascript',
                     headers={'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache'})
 
@@ -1489,16 +1505,17 @@ def push_public_key():
 
 @app.route('/push/subscribe', methods=['POST'])
 def push_subscribe():
-    data  = request.get_json()
-    sub   = data['subscription']
-    codes = data.get('eventCodes')  # list of EEE strings, or null for priority preset
-    pushdb.save_subscription(
-        sub['endpoint'],
-        sub['keys']['p256dh'],
-        sub['keys']['auth'],
-        int(data.get('minPriority', 3)),
-        event_codes=codes,
-    )
+    data = request.get_json(silent=True) or {}
+    try:
+        sub   = data['subscription']
+        codes = data.get('eventCodes')  # list of EEE strings, or null for preset
+        endpoint = sub['endpoint']
+        p256dh   = sub['keys']['p256dh']
+        auth     = sub['keys']['auth']
+        min_pri  = int(data.get('minPriority', 3))
+    except (KeyError, TypeError, ValueError):
+        abort(400)
+    pushdb.save_subscription(endpoint, p256dh, auth, min_pri, event_codes=codes)
     return jsonify({'ok': True})
 
 
@@ -1513,8 +1530,11 @@ def push_info():
 
 @app.route('/push/unsubscribe', methods=['POST'])
 def push_unsubscribe():
-    data = request.get_json()
-    pushdb.delete_subscription(data['endpoint'])
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint')
+    if not endpoint:
+        abort(400)
+    pushdb.delete_subscription(endpoint)
     return jsonify({'ok': True})
 
 
@@ -1626,11 +1646,21 @@ def get_alert(alert_id):
     return jsonify(alert)
 
 
+def _safe_path(base, filename):
+    """Resolve filename under base, refusing path-traversal escapes (`..`,
+    absolute paths). Aborts 404 if the resolved path leaves base."""
+    base = Path(base).resolve()
+    path = (base / filename).resolve()
+    if base != path and base not in path.parents:
+        abort(404)
+    return path
+
+
 @app.route('/audio/<path:filename>')
 def serve_audio(filename):
     if not filename.endswith('.wav'):
         abort(400)
-    path = Path(alertdb.AUDIO_DIR) / filename
+    path = _safe_path(alertdb.AUDIO_DIR, filename)
     if not path.exists():
         abort(404)
     return send_file(path, mimetype='audio/wav')
@@ -1640,7 +1670,7 @@ def serve_audio(filename):
 def serve_map(filename):
     if not filename.endswith('.png'):
         abort(400)
-    path = Path(alertdb.MAPS_DIR) / filename
+    path = _safe_path(alertdb.MAPS_DIR, filename)
     if not path.exists():
         abort(404)
     return send_file(path, mimetype='image/png')
@@ -1666,6 +1696,10 @@ def zone_geo():
     zdir = Path(cfg.env('MAP_CACHE_DIR', '/alerts/mapdata')) / 'zones'
     feats = []
     for key in keys[:30]:
+        # SAME (6 digits) or UGC (e.g. MIC163) only — never let a request-supplied
+        # key carry path separators into the zones directory lookup.
+        if not re.fullmatch(r'[A-Za-z0-9]{6}', key):
+            continue
         if key[0].isdigit():
             key = cfg.fips_to_county_ugc(cfg.normalize_same(key)) or key
         p = zdir / f'{key}.geojson'
@@ -1687,6 +1721,11 @@ def test_alert():
 
     Rows are flagged is_test, styled distinctly, and purged after 24h.
     """
+    # CSRF guard: this endpoint fires real notifications to every target, so
+    # require a JSON content-type. That forces a CORS preflight for cross-origin
+    # callers, blocking a naive form/img-based cross-site POST.
+    if not (request.content_type or '').startswith('application/json'):
+        abort(415)
     import time as _t
     import config as cfg
     from ingest import IncomingAlert, ingest
@@ -1713,9 +1752,8 @@ def test_alert():
 
 @app.route('/static/leaflet/<path:filename>')
 def serve_leaflet(filename):
-    base = Path('/app/scripts/static/leaflet')
-    path = (base / filename).resolve()
-    if not str(path).startswith(str(base)) or not path.exists():
+    path = _safe_path('/app/scripts/static/leaflet', filename)
+    if not path.exists():
         abort(404)
     resp = send_file(path)
     resp.headers['Cache-Control'] = 'public, max-age=86400'

@@ -78,7 +78,7 @@ def handle_product(attrs: dict, raw_text: str, log_only: bool = False) -> int:
     geometry = nwws_parse.parse_latlon(text)
 
     ingested = 0
-    for seg in nwws_parse.split_segments(text):
+    for seg in nwws_parse.split_segments(text, issue_ts):
         seg_fips = {config.normalize_same(f)
                     for u in seg['ugc']
                     for f in [config.ugc_county_to_fips(u)] if f}
@@ -221,6 +221,13 @@ def run_xmpp():
             bot.loop.run_until_complete(bot.disconnected)
         except Exception as e:
             print(f'nwws: connection error: {e}', flush=True)
+        finally:
+            # Tear the bot down so sockets/handlers don't accumulate across the
+            # routine reconnect cycle (NWWS connections die silently).
+            try:
+                bot.disconnect()
+            except Exception:
+                pass
         config.set_source_status('nwws', connected=False)
         if getattr(bot, '_stopping', False):
             print('nwws: fatal auth error — sleeping 1h before retry', flush=True)

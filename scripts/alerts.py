@@ -114,12 +114,20 @@ def init_db():
 
 
 def parse_expires_at(tttt: str, alert_time: float) -> float:
-    """Convert SAME purge field (HHMM string) to an expiry timestamp."""
+    """Convert SAME purge field (4-digit HHMM) to an expiry timestamp.
+
+    SAME TTTT is HH (00-99) followed by MM (00-59). A garbled radio decode like
+    '9999' would otherwise yield a multi-day 'active' alert that pollutes the
+    candidate set and dashboard, so out-of-range values fall back to 1 h."""
     try:
+        if len(tttt) < 4:
+            raise ValueError('short')
         hh, mm = int(tttt[:2]), int(tttt[2:4])
+        if not (0 <= hh <= 99 and 0 <= mm < 60) or (hh == 0 and mm == 0):
+            raise ValueError('out of range')
         return alert_time + hh * 3600 + mm * 60
-    except Exception:
-        return alert_time + 3600  # default 1 h if unparseable
+    except (ValueError, TypeError):
+        return alert_time + 3600  # default 1 h if unparseable/garbled
 
 
 # ── Row access for ingest (callers pass a live connection so that match +
@@ -145,11 +153,15 @@ def find_by_native_id(conn, column: str, value: str):
 
 
 def find_candidates(conn, now: float, window_secs: int = 1800):
-    """Rows that could heuristically match a new arrival: recent or unexpired."""
+    """Rows that could heuristically match a new arrival: recent or unexpired.
+
+    LIMIT is generous so a large outbreak (many simultaneous active warnings in
+    the area) can't evict the true match from the candidate set and cause a
+    duplicate row + duplicate notification."""
     rows = conn.execute(
         '''SELECT * FROM alerts
             WHERE alert_time > ? OR (expires_at IS NOT NULL AND expires_at > ?)
-            ORDER BY alert_time DESC LIMIT 50''',
+            ORDER BY alert_time DESC LIMIT 200''',
         (now - window_secs, now)
     ).fetchall()
     return [dict(r) for r in rows]

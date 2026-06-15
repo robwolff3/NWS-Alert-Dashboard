@@ -131,7 +131,9 @@ def main():
                     except OSError:
                         pass
 
-            ts           = time.strftime('%Y%m%d_%H%M%S')
+            # UTC so the round-trip with process_alert is exact year-round
+            # (local time is ambiguous/non-monotonic across DST transitions).
+            ts           = time.strftime('%Y%m%d_%H%M%S', time.gmtime())
             current_path = out_dir / f'seg_{ts}.wav'
             n = 1
             while current_path.exists():
