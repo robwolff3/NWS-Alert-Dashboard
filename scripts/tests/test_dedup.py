@@ -228,12 +228,98 @@ def test_repeat_poll_idempotent():
     check('one notification', len(NOTIFICATIONS) == 1)
 
 
+def test_api_update_overwrites_and_records():
+    print('API revision overwrites content, records a revision (no escalation)')
+    fresh_db()
+    now = time.time()
+    id1 = ing.ingest(api_tor(ts=now))            # 'At 530 PM...', Extreme, geom A
+    upd = api_tor(ts=now + 300, action='CON')    # same severity (Extreme)
+    upd.description = 'At 600 PM the tornado was near...'
+    upd.headline = 'Tornado Warning — updated'
+    upd.geometry = {'type': 'Polygon', 'coordinates': [[[-83.45, 42.12],
+                    [-83.35, 42.12], [-83.35, 42.28], [-83.45, 42.28], [-83.45, 42.12]]]}
+    id2 = ing.ingest(upd)
+    check('merged same row', id1 == id2)
+    row = alertdb.get_alert(id1)
+    check('description overwritten', row['description'].startswith('At 600 PM'))
+    check('headline overwritten', row['headline'].endswith('updated'))
+    check('geometry overwritten', '42.28' in row['geometry'])
+    check('update_count is 1', row['update_count'] == 1, row['update_count'])
+    revs = json.loads(row['revisions'] or '[]')
+    check('one revision snapshot', len(revs) == 1, revs)
+    check('prior description kept', bool(revs) and
+          revs[0].get('description', '').startswith('At 530 PM'))
+    check('not re-notified (no escalation)', len(NOTIFICATIONS) == 1, NOTIFICATIONS)
+    # a radio decode is never a content revision
+    ing.ingest(radio_tor(ts=now + 360))
+    check('radio did not bump update_count',
+          alertdb.get_alert(id1)['update_count'] == 1)
+
+
+def test_escalation_renotifies():
+    print('severity rise / PDS wording re-notifies (escalation mode)')
+    fresh_db()
+    os.environ['RENOTIFY_ON_UPDATE'] = 'escalation'
+    try:
+        now = time.time()
+        init = api_tor(ts=now); init.severity = 'Severe'
+        id1 = ing.ingest(init)
+        upd = api_tor(ts=now + 300, action='CON')   # severity Extreme = escalation
+        upd.description = 'This is now a PARTICULARLY DANGEROUS SITUATION...'
+        id2 = ing.ingest(upd)
+        check('merged', id1 == id2)
+        check('re-notified once', len(NOTIFICATIONS) == 2, NOTIFICATIONS)
+        check('escalated title', any('Escalated' in n['title'] for n in NOTIFICATIONS))
+        check('renotified_at set', bool(alertdb.get_alert(id1)['renotified_at']))
+    finally:
+        del os.environ['RENOTIFY_ON_UPDATE']
+
+
+def test_renotify_off_suppresses():
+    print('RENOTIFY_ON_UPDATE=off suppresses but still overwrites + records')
+    fresh_db()
+    os.environ['RENOTIFY_ON_UPDATE'] = 'off'
+    try:
+        now = time.time()
+        init = api_tor(ts=now); init.severity = 'Severe'
+        ing.ingest(init)
+        upd = api_tor(ts=now + 300, action='CON')   # would escalate if enabled
+        id2 = ing.ingest(upd)
+        check('no re-notification', len(NOTIFICATIONS) == 1, NOTIFICATIONS)
+        row = alertdb.get_alert(id2)
+        check('severity still overwritten', row['severity'] == 'Extreme')
+        check('revision still recorded', row['update_count'] == 1)
+    finally:
+        del os.environ['RENOTIFY_ON_UPDATE']
+
+
+def test_renotify_throttled():
+    print('RENOTIFY_ON_UPDATE=all throttles a second update within the interval')
+    fresh_db()
+    os.environ['RENOTIFY_ON_UPDATE'] = 'all'
+    try:
+        now = time.time()
+        id1 = ing.ingest(api_tor(ts=now))
+        u1 = api_tor(ts=now + 10, action='CON'); u1.description = 'update one text'
+        ing.ingest(u1)
+        check('first revision re-notifies', len(NOTIFICATIONS) == 2, NOTIFICATIONS)
+        u2 = api_tor(ts=now + 20, action='CON'); u2.description = 'update two text'
+        ing.ingest(u2)
+        check('second revision throttled', len(NOTIFICATIONS) == 2, NOTIFICATIONS)
+        check('both revisions recorded',
+              alertdb.get_alert(id1)['update_count'] == 2)
+    finally:
+        del os.environ['RENOTIFY_ON_UPDATE']
+
+
 if __name__ == '__main__':
     for fn in [test_radio_then_api, test_api_then_radio,
                test_nwws_then_api_then_radio, test_con_extends_no_notify,
                test_can_expires, test_new_etn_separate_row,
                test_different_county_no_match, test_radio_only_offline,
-               test_event_filter_silences, test_repeat_poll_idempotent]:
+               test_event_filter_silences, test_repeat_poll_idempotent,
+               test_api_update_overwrites_and_records, test_escalation_renotifies,
+               test_renotify_off_suppresses, test_renotify_throttled]:
         fn()
     print(f'\n{_PASS} passed, {_FAIL} failed')
     sys.exit(1 if _FAIL else 0)

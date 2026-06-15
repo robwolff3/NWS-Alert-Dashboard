@@ -41,6 +41,10 @@ _MIGRATION_COLUMNS = [
     ('map_file',    'TEXT'),    # '{id}.png' under /alerts/maps
     ('map_sent',    'INTEGER DEFAULT 0'),
     ('is_test',     'INTEGER DEFAULT 0'),
+    ('updated_at',   'REAL'),               # last content revision time
+    ('update_count', 'INTEGER DEFAULT 0'),  # number of content revisions seen
+    ('renotified_at', 'REAL'),              # last re-notification (throttle clock)
+    ('revisions',    'TEXT'),               # JSON array of prior-version snapshots
 ]
 
 

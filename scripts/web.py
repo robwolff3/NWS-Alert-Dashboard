@@ -21,6 +21,17 @@ import push as pushdb
 
 app = Flask(__name__)
 
+# Optional reverse-proxy mount under a sub-path (e.g. served at /radio/). When
+# TRUST_PROXY is set, honor X-Forwarded-Prefix so request.script_root reflects
+# the mount and every emitted URL is prefixed; left at root ('') otherwise.
+# Off by default and trusts ONLY x_prefix (the app builds no absolute external
+# URLs): enable solely behind a proxy that authoritatively sets
+# X-Forwarded-Prefix AND strips any client-supplied one, else the prefix can be
+# spoofed. A direct public deployment must NOT set this.
+if os.environ.get('TRUST_PROXY', '').strip().lower() in ('1', 'true', 'yes', 'on'):
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_prefix=1)
+
 # Changes on each container start — forces SW cache refresh after updates
 _BOOT = int(time.time())
 
@@ -42,7 +53,7 @@ _LIVE_PLAYER_HTML = '''<div class="live-player">
   <div class="live-dot" id="live-dot"></div>
   <span class="live-label">Live Radio</span>
   <audio id="live-audio" controls preload="none">
-    <source src="/stream" type="audio/wav">
+    <source src="__BASE__/stream" type="audio/wav">
   </audio>
 </div>'''
 
@@ -84,23 +95,62 @@ def _resolved_subtitle():
         return ', '.join(parts)
     return os.environ.get('LOCATION', '').strip()
 
-_MANIFEST = {
-    'name': 'NWS Alert Dashboard',
-    'short_name': 'NWS Alerts',
-    'description': 'Multi-source NWS alert monitor (NWWS-OI, weather radio, REST API)',
-    'start_url': '/',
-    'display': 'standalone',
-    'background_color': '#0f1117',
-    'theme_color': '#0f1117',
-    'icons': [
-        {'src': '/icons/icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any maskable'},
-        {'src': '/icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any maskable'},
-    ],
-}
+
+def _radar_cfg():
+    """Client config for the animated radar overlay (IEM NEXRAD N0Q tiles) and
+    the home-location pin. IEM re-serves NWS NEXRAD as Web-Mercator {z}/{x}/{y}
+    tiles with a {stamp} (UTCYYYYMMDDHHMM) time slot. All knobs env-overridable.
+    The browser fetches tiles directly; nothing here touches the offline PNG
+    renderer (maps.py)."""
+    import config as cfg
+    home = None
+    try:
+        with open(DERIVED_JSON) as f:
+            loc = json.load(f).get('location')
+        if isinstance(loc, (list, tuple)) and len(loc) == 2:
+            home = [float(loc[0]), float(loc[1])]
+    except (OSError, ValueError, TypeError):
+        pass
+    try:
+        opacity = float(cfg.env('RADAR_OPACITY', '0.75'))
+    except ValueError:
+        opacity = 0.75
+    return {
+        'enabled':    cfg.env_bool('RADAR_ENABLED', True),
+        'home':       home,
+        'tile':       cfg.env('RADAR_TILE_URL',
+                              'https://mesonet.agron.iastate.edu/cache/tile.py/'
+                              '1.0.0/ridge::USCOMP-N0Q-{stamp}/{z}/{x}/{y}.png'),
+        'stepMin':    cfg.env_int('RADAR_STEP_MIN', 5),
+        'maxFrames':  cfg.env_int('RADAR_MAX_FRAMES', 24),
+        'opacity':    opacity,
+        'frameMs':    cfg.env_int('RADAR_FRAME_MS', 450),
+        'dwellMs':    cfg.env_int('RADAR_DWELL_MS', 1400),
+        'latencySec': cfg.env_int('RADAR_LATENCY_SEC', 300),
+    }
+
+
+def _manifest(base=''):
+    """PWA manifest; start_url/scope/icons are prefixed by the mount base."""
+    return {
+        'name': 'NWS Alert Dashboard',
+        'short_name': 'NWS Alerts',
+        'description': 'Multi-source NWS alert monitor (NWWS-OI, weather radio, REST API)',
+        'start_url': base + '/',
+        'scope': base + '/',
+        'display': 'standalone',
+        'background_color': '#0f1117',
+        'theme_color': '#0f1117',
+        'icons': [
+            {'src': base + '/icons/icon-192.png', 'sizes': '192x192', 'type': 'image/png', 'purpose': 'any maskable'},
+            {'src': base + '/icons/icon-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'any maskable'},
+        ],
+    }
 
 _SW = f"""\
 const CACHE = 'nwr-{_BOOT}';
-const STATIC = ['/', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/notif-icon.png'];
+const BASE = '__BASE__';
+const STATIC = [BASE + '/', BASE + '/manifest.json', BASE + '/icons/icon-192.png', BASE + '/icons/icon-512.png', BASE + '/icons/notif-icon.png'];
 
 self.addEventListener('install', e => {{
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting()));
@@ -116,8 +166,8 @@ self.addEventListener('activate', e => {{
 
 self.addEventListener('fetch', e => {{
   const p = new URL(e.request.url).pathname;
-  if (p.startsWith('/api/') || p === '/events' || p === '/stream' ||
-      p.startsWith('/audio/') || p.startsWith('/push/')) return;
+  if (p.startsWith(BASE + '/api/') || p === BASE + '/events' || p === BASE + '/stream' ||
+      p.startsWith(BASE + '/audio/') || p.startsWith(BASE + '/push/')) return;
   e.respondWith(
     caches.match(e.request).then(cached => {{
       if (cached) return cached;
@@ -136,12 +186,12 @@ self.addEventListener('push', e => {{
   e.waitUntil(
     self.registration.showNotification(d.title || 'NWR Alert', {{
       body:              d.body || '',
-      icon:              '/icons/icon-192.png',
-      badge:             '/icons/notif-icon.png',
+      icon:              BASE + '/icons/icon-192.png',
+      badge:             BASE + '/icons/notif-icon.png',
       tag:               'nwr-' + p,
       renotify:          true,
       requireInteraction: p >= 4,
-      data:              {{ url: '/' }}
+      data:              {{ url: BASE + '/' }}
     }})
   );
 }});
@@ -151,7 +201,7 @@ self.addEventListener('notificationclick', e => {{
   e.waitUntil(
     clients.matchAll({{type: 'window', includeUncontrolled: true}}).then(list => {{
       for (const c of list) {{ if ('focus' in c) return c.focus(); }}
-      return clients.openWindow(e.notification.data?.url || '/');
+      return clients.openWindow(e.notification.data?.url || BASE + '/');
     }})
   );
 }});
@@ -163,15 +213,17 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>__TITLE__</title>
+<script>window.APP_BASE="__BASE__";</script>
+<script>window.RADAR_CFG=__RADAR_CFG__;</script>
 <script>(function(){var t=localStorage.getItem('theme');if(t&&t!=='auto')document.documentElement.setAttribute('data-theme',t);})();</script>
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="__BASE__/manifest.json">
 <meta name="theme-color" content="#0f1117">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NWR Alerts">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="stylesheet" href="/static/leaflet/leaflet.css">
-<script src="/static/leaflet/leaflet.js"></script>
+<link rel="apple-touch-icon" href="__BASE__/icons/icon-192.png">
+<link rel="stylesheet" href="__BASE__/static/leaflet/leaflet.css">
+<script src="__BASE__/static/leaflet/leaflet.js"></script>
 <style>
 :root {
   --bg:      #0f1117;
@@ -241,6 +293,17 @@ header{
   font-size:.65rem;font-weight:400;text-transform:none;letter-spacing:normal;
   color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:.3rem;
 }
+.filter-bar{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.85rem}
+.filter-input{
+  flex:1 1 12rem;min-width:8rem;
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:.3rem .6rem;border-radius:.25rem;font-size:.75rem;font-family:inherit;
+}
+.filter-sel{
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:.3rem .5rem;border-radius:.25rem;font-size:.75rem;font-family:inherit;cursor:pointer;
+}
+.filter-count{font-size:.65rem;color:var(--muted);margin-left:auto;white-space:nowrap}
 .section-label{
   font-size:.8rem;font-weight:700;letter-spacing:.12em;
   text-transform:uppercase;color:var(--text);
@@ -287,6 +350,25 @@ section + section{margin-top:2rem}
 .p3 .active-badge{background:var(--p3);color:#fff}
 .p2 .active-badge{background:var(--p2);color:#fff}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.updated-badge{
+  display:inline-block;font-size:.6rem;font-weight:700;letter-spacing:.03em;
+  padding:.1rem .35rem;border-radius:.25rem;margin-left:.4rem;vertical-align:middle;
+  background:#b45309;color:#fff;cursor:default;
+}
+.revisions{margin-top:.5rem;font-size:.75rem}
+.revisions>summary{
+  cursor:pointer;color:var(--muted);font-size:.7rem;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;
+}
+.rev-entry{
+  border-left:2px solid var(--border);padding:.15rem 0 .15rem .6rem;margin:.45rem 0;
+}
+.rev-when{color:var(--muted);font-size:.65rem}
+.rev-fields{color:var(--text);margin:.1rem 0}
+.rev-entry pre{
+  white-space:pre-wrap;font-family:inherit;font-size:.72rem;line-height:1.5;
+  color:var(--muted);margin:.25rem 0 0;
+}
 .expires{font-size:.65rem;color:var(--muted);margin-bottom:.5rem}
 .eee{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;font-family:monospace}
 .header-msg{
@@ -321,13 +403,33 @@ section + section{margin-top:2rem}
 }
 .alert-text{
   white-space:pre-wrap;font-family:inherit;font-size:.8rem;line-height:1.55;
-  color:var(--text);margin:.5rem 0 0;max-height:24rem;overflow-y:auto;
+  color:var(--text);margin:.5rem 0 0;
 }
 .alert-map{
   height:320px;margin-top:.5rem;border-radius:.4rem;
   border:1px solid var(--border);background:var(--bg);
 }
 .leaflet-container{background:var(--bg)}
+.radar-ctl{
+  display:flex;align-items:center;gap:.5rem;margin-top:.4rem;
+  padding:.3rem .5rem;background:var(--surface);
+  border:1px solid var(--border);border-radius:.4rem;
+}
+.radar-play{
+  background:none;border:1px solid var(--border);color:var(--text);
+  width:1.7rem;height:1.7rem;border-radius:.25rem;font-size:.7rem;
+  cursor:pointer;padding:0;flex-shrink:0;line-height:1;
+}
+.radar-play:hover{background:var(--border)}
+.radar-slider{flex:1 1 auto;min-width:4rem;cursor:pointer;accent-color:var(--p2)}
+.radar-time{font-size:.7rem;color:var(--muted);min-width:4.5rem;text-align:right;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.radar-tag{
+  font-size:.55rem;font-weight:700;letter-spacing:.08em;color:#60a5fa;
+  border:1px solid #3b82f6;border-radius:.2rem;padding:.05rem .3rem;flex-shrink:0;
+}
+.home-pin{background:none;border:none}
+.home-pin svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
 audio{width:100%;margin-top:.6rem;height:2rem}
 .empty{
   text-align:center;color:var(--muted);padding:2.5rem;
@@ -410,7 +512,7 @@ section{margin-bottom:2rem}
 <body>
 <header>
   <div class="header-brand">
-    <img src="/icons/logo.png" alt="NOAA Weather Radio All Hazards" class="nwr-logo">
+    <img src="__BASE__/icons/logo.png" alt="NOAA Weather Radio All Hazards" class="nwr-logo">
     <div>
       <div class="header-title">__TITLE__</div>
       <div class="header-subtitle">__SUBTITLE__</div>
@@ -460,10 +562,23 @@ __LIVE_PLAYER__
       <button class="page-btn test-btn" id="test-btn" onclick="sendTestAlert(this)" title="Inject a demo alert through the full pipeline">Send test alert</button>
     </div>
   </div>
+  <div class="filter-bar">
+    <input type="search" id="hist-search" class="filter-input" autocomplete="off"
+           placeholder="Search event, headline, or text…" oninput="onFilterChange()">
+    <select id="hist-priority" class="filter-sel" onchange="onFilterChange()" title="Filter by priority">
+      <option value="">All priorities</option>
+      <option value="CRITICAL">Critical</option>
+      <option value="HIGH">High</option>
+      <option value="MODERATE">Moderate</option>
+      <option value="LOW">Low</option>
+    </select>
+    <span class="filter-count" id="hist-count"></span>
+  </div>
   <div id="history"></div>
 </section>
 
 <script>
+const APP_BASE = window.APP_BASE || '';
 const esc = s => String(s ?? '')
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -504,17 +619,28 @@ function fmtCountdown(expiresAt) {
 
 function audioHtml(a) {
   if (!a.audio_file) return '';
-  return `<audio controls src="/audio/${esc(a.id)}.wav"></audio>`;
+  return `<audio controls src="${APP_BASE}/audio/${esc(a.id)}.wav"></audio>`;
+}
+
+function fmtRecvTime(ts) {
+  // h:mm:ss tt, e.g. "3:04:09 PM" — for ordering sources by arrival.
+  return new Date(ts * 1000).toLocaleTimeString([],
+    {hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true});
 }
 
 function srcBadges(a) {
-  let srcs = [];
-  try { srcs = Object.keys(JSON.parse(a.sources || '{}')); } catch(_) {}
-  if (a.is_test) srcs.push('test');
+  let obj = {};
+  try { obj = JSON.parse(a.sources || '{}'); } catch(_) {}
+  // Earliest-received source first, so chip order matches arrival order.
+  let srcs = Object.entries(obj)
+    .map(([s, ts]) => [s, Number(ts)])
+    .sort((x, y) => x[1] - y[1]);
+  if (a.is_test) srcs.push(['test', null]);
   const lbl = {radio: 'RADIO', nwws: 'NWWS', api: 'API', test: 'TEST'};
-  return srcs.map(s =>
-    `<span class="src-badge src-${esc(s)}">${lbl[s] || esc(s).toUpperCase()}</span>`
-  ).join('');
+  return srcs.map(([s, ts]) => {
+    const tip = ts ? ` title="received ${esc(fmtRecvTime(ts))}"` : '';
+    return `<span class="src-badge src-${esc(s)}"${tip}>${lbl[s] || esc(s).toUpperCase()}</span>`;
+  }).join('');
 }
 
 function detailsHtml(a) {
@@ -577,7 +703,7 @@ async function initAlertMap(id) {
     try { keys.push(...JSON.parse(a.ugc || '[]').filter(u => u[2] === 'Z')); } catch(_) {}
     if (keys.length) {
       try {
-        const r = await fetch('/api/zonegeo?fips=' + encodeURIComponent(keys.join(',')));
+        const r = await fetch(APP_BASE + '/api/zonegeo?fips=' + encodeURIComponent(keys.join(',')));
         if (r.ok) {
           const fc = await r.json();
           if (fc.features.length) geojson = fc;
@@ -588,7 +714,7 @@ async function initAlertMap(id) {
   if (!geojson) { el.innerHTML = '<div class="empty">No map data cached.</div>'; return; }
 
   const map = L.map(el, {attributionControl: false, zoomSnap: 0.5});
-  L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+  L.tileLayer(APP_BASE + '/tiles/{z}/{x}/{y}.png', {
     minZoom: Math.max(3, _mapMeta.zoom_min - 1),
     maxZoom: _mapMeta.zoom_max + 2,
     minNativeZoom: _mapMeta.zoom_min,
@@ -602,6 +728,12 @@ async function initAlertMap(id) {
   }).addTo(map);
   map.fitBounds(layer.getBounds().pad(0.25));
   _maps[id] = map;
+
+  addHomePin(map);
+  if (radarRelevant(a)) {
+    const active = !!(a.expires_at && a.expires_at > Date.now() / 1000);
+    setupRadar(id, a, map, el, active);
+  }
 }
 
 function saveOpenMaps() {
@@ -610,6 +742,8 @@ function saveOpenMaps() {
 }
 
 function destroyMaps() {
+  Object.values(_radar).forEach(R => { try { clearTimeout(R.timer); } catch(_) {} });
+  _radar = {};
   Object.values(_maps).forEach(m => { try { m.remove(); } catch(_) {} });
   _maps = {};
 }
@@ -619,6 +753,200 @@ function restoreOpenMaps(ids) {
     const d = document.querySelector(`[data-mapdetails="${CSS.escape(id)}"]`);
     if (d) d.open = true;   // ontoggle fires initAlertMap
   });
+}
+
+// ── Home-location pin ────────────────────────────────────────────────────────
+const RADAR = window.RADAR_CFG || {};
+const _BLANK_TILE =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+function addHomePin(map) {
+  if (!RADAR.home) return;
+  const icon = L.divIcon({
+    className: 'home-pin',
+    html: '<svg viewBox="0 0 24 36" width="22" height="33">' +
+          '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" ' +
+          'fill="#2563eb" stroke="#fff" stroke-width="2"/>' +
+          '<circle cx="12" cy="12" r="4.5" fill="#fff"/></svg>',
+    iconSize: [22, 33], iconAnchor: [11, 33],
+  });
+  L.marker(RADAR.home, {icon, interactive: true, keyboard: false})
+    .bindTooltip('You are here').addTo(map);
+}
+
+// ── Animated radar overlay (IEM NEXRAD N0Q tiles; online enrichment) ──────────
+// Relevant for precip/convective events only; radar is blank for the rest.
+let _radar = {};   // alert id → {map, a, active, frames[], layers{}, idx, timer,
+                   //            playing, els}
+const _RADAR_RE =
+  /tornado|thunderstorm|flood|winter (storm|weather)|snow|blizzard|ice storm|sleet|squall|hurricane|tropical|storm surge|special (weather|marine)/i;
+
+function radarRelevant(a) {
+  if (!RADAR.enabled || !RADAR.tile) return false;
+  const n = a.event_name || '';
+  if (/coastal flood|lakeshore flood/i.test(n)) return false;   // tidal, not radar
+  return _RADAR_RE.test(n);
+}
+
+function _stamp(t) {
+  const d = new Date(t * 1000), p = x => String(x).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
+         `${p(d.getUTCHours())}${p(d.getUTCMinutes())}`;
+}
+
+function _fmtRadarTime(t) {
+  return new Date(t * 1000).toLocaleTimeString([],
+    {hour: 'numeric', minute: '2-digit'});
+}
+
+// Build the list of 5-min frame epochs from event onset to its end. For active
+// alerts the end trails 'now' by the IEM publish latency; coarsen the step (in
+// whole 5-min multiples, so frames stay on valid IEM slots) if the count would
+// exceed maxFrames.
+function radarFrames(a, active) {
+  const base = (RADAR.stepMin || 5) * 60;
+  const start = Math.floor((a.onset || a.alert_time) / base) * base;
+  let end = active ? (Date.now() / 1000 - (RADAR.latencySec || 300))
+                   : (a.expires_at || a.alert_time);
+  end = Math.max(end, start);
+  let step = base;
+  const max = RADAR.maxFrames || 24;
+  if ((end - start) / step + 1 > max) {
+    step = Math.ceil(((end - start) / base + 1) / max) * base;
+  }
+  const frames = [];
+  for (let t = start; t <= end + 1; t += step) frames.push(t);
+  if (!frames.length) frames.push(start);
+  return frames;
+}
+
+function _radarLayer(R, t) {
+  const key = _stamp(t);
+  if (R.layers[key]) return R.layers[key];
+  const lyr = L.tileLayer(RADAR.tile.replace('{stamp}', key), {
+    opacity: 0, zIndex: 5,
+    maxNativeZoom: _mapMeta.zoom_max, maxZoom: _mapMeta.zoom_max + 2,
+    errorTileUrl: _BLANK_TILE,
+  });
+  lyr._radLoaded = false;
+  lyr.on('load', () => { lyr._radLoaded = true; });
+  lyr.addTo(R.map);
+  R.layers[key] = lyr;
+  return lyr;
+}
+
+function radarShow(R, i) {
+  R.idx = (i % R.frames.length + R.frames.length) % R.frames.length;
+  const t = R.frames[R.idx];
+  const cur = _radarLayer(R, t);
+  _radarLayer(R, R.frames[(R.idx + 1) % R.frames.length]);  // prefetch next frame
+
+  const reveal = () => {
+    Object.values(R.layers).forEach(l => { if (l !== cur) l.setOpacity(0); });
+    cur.setOpacity(RADAR.opacity || 0.75);
+  };
+  // First-cycle anti-strobe: hold the prior (loaded) frame on screen until this
+  // frame's tiles are actually in, then swap. Once cached, reveal is immediate.
+  if (cur._radLoaded) reveal();
+  else cur.once('load', () => { if (R.frames[R.idx] === t) reveal(); });
+
+  if (R.els.time)   R.els.time.textContent = _fmtRadarTime(t);
+  if (R.els.slider) { R.els.slider.max = R.frames.length - 1; R.els.slider.value = R.idx; }
+}
+
+function radarTick(R) {
+  const wasLast = R.idx === R.frames.length - 1;
+  radarShow(R, R.idx + 1);
+  const delay = wasLast ? (RADAR.dwellMs || 1400) : (RADAR.frameMs || 450);
+  R.timer = setTimeout(() => radarTick(R), delay);
+}
+
+function radarPlay(R) {
+  R.playing = true;
+  if (R.els.btn) R.els.btn.textContent = '⏸';
+  clearTimeout(R.timer);
+  radarTick(R);
+}
+
+function radarPause(R) {
+  R.playing = false;
+  if (R.els.btn) R.els.btn.textContent = '▶';
+  clearTimeout(R.timer);
+}
+
+function setupRadar(id, a, map, mapEl, active) {
+  const R = {map, a, active, frames: radarFrames(a, active), layers: {},
+             idx: 0, timer: null, playing: false, els: {}};
+
+  // Control bar inserted directly below the map.
+  const bar = document.createElement('div');
+  bar.className = 'radar-ctl';
+  bar.innerHTML =
+    '<button class="radar-play" type="button" aria-label="Play/pause radar">⏸</button>' +
+    `<input type="range" class="radar-slider" min="0" max="${R.frames.length - 1}" value="0">` +
+    '<span class="radar-time"></span><span class="radar-tag">RADAR</span>';
+  mapEl.insertAdjacentElement('afterend', bar);
+  R.els = {
+    btn:    bar.querySelector('.radar-play'),
+    slider: bar.querySelector('.radar-slider'),
+    time:   bar.querySelector('.radar-time'),
+  };
+  R.els.btn.addEventListener('click', () => R.playing ? radarPause(R) : radarPlay(R));
+  R.els.slider.addEventListener('input', e => {
+    radarPause(R);
+    radarShow(R, Number(e.target.value));
+  });
+
+  _radar[id] = R;
+  radarShow(R, R.frames.length - 1);   // newest frame first
+  radarPlay(R);
+}
+
+// Active events: append newly published frames (~every 5 min) so the loop keeps
+// up with the storm. Expired alerts keep a fixed window and just replay.
+function radarExtend() {
+  Object.values(_radar).forEach(R => {
+    if (!R.active) return;
+    const f = radarFrames(R.a, true);
+    if (f.length > R.frames.length) {
+      R.frames = f;
+      if (R.els.slider) R.els.slider.max = f.length - 1;
+    }
+  });
+}
+setInterval(radarExtend, 60000);
+
+const _REV_LABEL = {headline: 'headline', description: 'alert text',
+  instruction: 'instructions', geometry: 'warning area', severity: 'severity'};
+
+function updatedBadge(a) {
+  const n = a.update_count || 0;
+  if (!n) return '';
+  const when = a.updated_at ? `Last updated ${fmtTime(a.updated_at)}` : 'Updated';
+  return `<span class="updated-badge" title="${esc(when)} · ${n} update${n === 1 ? '' : 's'}">` +
+         `UPDATED${n > 1 ? ' ×' + n : ''}</span>`;
+}
+
+// Collapsed history of prior versions; each snapshot holds the values that were
+// replaced, so we can show what the alert said before each revision.
+function revisionsHtml(a) {
+  let revs = [];
+  try { revs = JSON.parse(a.revisions || '[]'); } catch(_) {}
+  if (!revs.length) return '';
+  const entries = revs.slice().reverse().map(r => {
+    const changed = Object.keys(_REV_LABEL).filter(k => k in r)
+      .map(k => _REV_LABEL[k]).join(', ');
+    const prior = (r.description || r.headline)
+      ? `<pre>${esc(r.description || r.headline)}</pre>` : '';
+    return `<div class="rev-entry">
+      <div class="rev-when">${esc(fmtTime(r.ts))}${r.action ? ' · ' + esc(r.action) : ''}</div>
+      <div class="rev-fields">Changed: ${esc(changed || '—')}</div>
+      ${prior}
+    </div>`;
+  }).join('');
+  return `<details class="revisions">
+    <summary>Revision history (${revs.length})</summary>${entries}
+  </details>`;
 }
 
 function card(a, active) {
@@ -632,7 +960,7 @@ function card(a, active) {
   <div class="card ${pc}${active ? ' active' : ''}${a.is_test ? ' test' : ''}">
     <div class="card-header">
       <span class="event-name">
-        <span class="badge">${PL(a.priority)}</span>${esc(a.event_name)}${activeBadge}${srcBadges(a)}
+        <span class="badge">${PL(a.priority)}</span>${esc(a.event_name)}${activeBadge}${updatedBadge(a)}${srcBadges(a)}
       </span>
       <span class="card-meta">${fmtTimeRange(a.alert_time, a.expires_at)}</span>
     </div>
@@ -641,6 +969,7 @@ function card(a, active) {
     <div class="header-msg">${esc(a.header_message)}</div>
     ${detailsHtml(a)}
     ${mapHtml(a, active)}
+    ${revisionsHtml(a)}
     ${voiceHtml(a)}
   </div>`;
 }
@@ -687,14 +1016,44 @@ function restoreAudioStates(states) {
   });
 }
 
+// History = expired (or never-expiring) rows, after the hide-tests toggle and
+// the search/priority/source filter bar. render() and changePage() share this
+// so the visible page always matches the active filters.
+function getHistory() {
+  const now = Date.now() / 1000;
+  let list = hideTests ? allAlerts.filter(a => !isTestAlert(a)) : allAlerts;
+  list = list.filter(a => !a.expires_at || a.expires_at <= now);
+  return applyHistoryFilters(list);
+}
+
+function applyHistoryFilters(list) {
+  const q   = (document.getElementById('hist-search')   || {}).value || '';
+  const pri = (document.getElementById('hist-priority') || {}).value || '';
+  const needle = q.trim().toLowerCase();
+  return list.filter(a => {
+    if (pri && PL(a.priority) !== pri) return false;
+    if (needle) {
+      const hay = [a.event_name, a.headline, a.description, a.instruction,
+                   a.header_message].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+}
+
 function renderHistory(history) {
   const total = Math.max(1, Math.ceil(history.length / PAGE_SIZE));
   historyPage = Math.min(historyPage, total - 1);
   const slice = history.slice(historyPage * PAGE_SIZE, (historyPage + 1) * PAGE_SIZE);
 
+  const countEl = document.getElementById('hist-count');
+  if (countEl) countEl.textContent = history.length
+    ? `${history.length} alert${history.length === 1 ? '' : 's'}` : '';
+
   let html = slice.length
     ? slice.map(a => card(a, false)).join('')
-    : '<div class="empty">No historical alerts yet.</div>';
+    : `<div class="empty">${filtersActive()
+        ? 'No alerts match your filters.' : 'No historical alerts yet.'}</div>`;
 
   if (total > 1) {
     html += `<div class="pagination">
@@ -709,12 +1068,41 @@ function renderHistory(history) {
 
 function changePage(delta) {
   historyPage += delta;
-  const now = Date.now() / 1000;
-  const vis = hideTests ? allAlerts.filter(a => !isTestAlert(a)) : allAlerts;
-  const history = vis.filter(a => !a.expires_at || a.expires_at <= now);
   const saved = saveAudioStates();
-  renderHistory(history);
+  renderHistory(getHistory());
   restoreAudioStates(saved);
+}
+
+function filtersActive() {
+  return FILTER_IDS.some(id => {
+    const el = document.getElementById(id);
+    return el && el.value.trim();
+  });
+}
+
+const FILTER_IDS = ['hist-search', 'hist-priority'];
+
+function onFilterChange() {
+  historyPage = 0;   // a narrower result set shouldn't strand you on a gone page
+  saveFilters();
+  const saved = saveAudioStates();
+  renderHistory(getHistory());
+  restoreAudioStates(saved);
+}
+
+function saveFilters() {
+  const vals = {};
+  FILTER_IDS.forEach(id => { vals[id] = (document.getElementById(id) || {}).value || ''; });
+  localStorage.setItem('histFilters', JSON.stringify(vals));
+}
+
+function restoreFilters() {
+  let vals = {};
+  try { vals = JSON.parse(localStorage.getItem('histFilters') || '{}'); } catch(_) {}
+  FILTER_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && vals[id]) el.value = vals[id];
+  });
 }
 
 function onHideRwtChange(cb) {
@@ -729,7 +1117,7 @@ async function sendTestAlert(btn) {
   btn.disabled = true;
   btn.textContent = 'Sending…';
   try {
-    const r = await fetch('/api/test-alert', {method: 'POST'});
+    const r = await fetch(APP_BASE + '/api/test-alert', {method: 'POST'});
     btn.textContent = r.ok ? 'Test sent ✓' : 'Failed';
   } catch(_) {
     btn.textContent = 'Failed';
@@ -743,7 +1131,6 @@ function render(alerts) {
   const now = Date.now() / 1000;
   const vis = hideTests ? alerts.filter(a => !isTestAlert(a)) : alerts;
   const active  = vis.filter(a => a.expires_at && a.expires_at > now);
-  const history = vis.filter(a => !a.expires_at || a.expires_at <= now);
 
   const saved = saveAudioStates();
   const openMaps = saveOpenMaps();
@@ -753,7 +1140,7 @@ function render(alerts) {
     ? active.map(a => card(a, true)).join('')
     : '<div class="empty">No active alerts.</div>';
 
-  renderHistory(history);
+  renderHistory(getHistory());
   restoreAudioStates(saved);
   restoreOpenMaps(openMaps);
   initOpenMaps();   // active-alert maps render expanded by default
@@ -765,7 +1152,7 @@ setInterval(tickCountdowns, 1000);
 // Status (frequency) — slow poll, changes rarely
 async function pollStatus() {
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch(APP_BASE + '/api/status');
     if (r.ok) {
       const st = await r.json();
       renderSourceHealth(st);
@@ -810,7 +1197,7 @@ function setUpdated(text) {
   document.getElementById('status').textContent = text;
 }
 function connectSSE() {
-  const es = new EventSource('/events');
+  const es = new EventSource(APP_BASE + '/events');
   es.onopen = () => setUpdated('live');
   es.onmessage = (e) => {
     render(JSON.parse(e.data));
@@ -850,7 +1237,7 @@ async function _saveCustomCodes() {
   const sub = await _swReg.pushManager.getSubscription();
   if (!sub) return;
   const codes = Array.from(document.querySelectorAll('#notif-groups input:checked')).map(el => el.value);
-  await fetch('/push/subscribe', {
+  await fetch(APP_BASE + '/push/subscribe', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({subscription: sub.toJSON(), eventCodes: codes}),
@@ -867,7 +1254,7 @@ function toggleCustomPanel() {
 
 async function _restorePrefs(sub) {
   try {
-    const r = await fetch('/push/info?endpoint=' + encodeURIComponent(sub.endpoint));
+    const r = await fetch(APP_BASE + '/push/info?endpoint=' + encodeURIComponent(sub.endpoint));
     if (!r.ok) return;
     const {minPriority, eventCodes} = await r.json();
     const sel    = document.getElementById('notif-priority');
@@ -932,12 +1319,12 @@ async function _refreshPushUI() {
 async function _enablePush() {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') { await _refreshPushUI(); return; }
-  const {key} = await fetch('/push/vapid-public-key').then(r => r.json());
+  const {key} = await fetch(APP_BASE + '/push/vapid-public-key').then(r => r.json());
   const sub = await _swReg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: _b64ToUint8(key),
   });
-  await fetch('/push/subscribe', {
+  await fetch(APP_BASE + '/push/subscribe', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({subscription: sub.toJSON(), minPriority: 3}),
@@ -948,7 +1335,7 @@ async function _enablePush() {
 async function _disablePush() {
   const sub = await _swReg.pushManager.getSubscription();
   if (sub) {
-    await fetch('/push/unsubscribe', {
+    await fetch(APP_BASE + '/push/unsubscribe', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({endpoint: sub.endpoint}),
@@ -974,7 +1361,7 @@ async function updatePriority() {
   toggle.style.display = 'none';
   const sub = await _swReg.pushManager.getSubscription();
   if (!sub) return;
-  await fetch('/push/subscribe', {
+  await fetch(APP_BASE + '/push/subscribe', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({subscription: sub.toJSON(), minPriority: parseInt(val), eventCodes: null}),
@@ -1008,6 +1395,7 @@ function cycleTheme() {
 refreshThemeBtn();
 
 document.getElementById('hide-rwt').checked = hideTests;
+restoreFilters();
 applyTestUI();
 pollStatus();
 connectSSE();
@@ -1027,14 +1415,15 @@ initPush();
   function reconnect() {
     if (audio.paused) return;           // user paused — don't restart
     dot.classList.remove('connected');
-    audio.src = '/stream?' + Date.now(); // cache-bust so browser re-fetches
+    audio.src = APP_BASE + '/stream?' + Date.now(); // cache-bust so browser re-fetches
     audio.play().catch(() => {});
   }
 })();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
+  const b = window.APP_BASE || '';
+  navigator.serviceWorker.register(b + '/sw.js', {scope: b + '/'});
 }
 </script>
 <footer class="site-footer">__FOOTER__</footer>
@@ -1053,6 +1442,8 @@ def index():
         .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
         .replace('__LIVE_PLAYER__', _LIVE_PLAYER_HTML if RADIO_ENABLED else '')
         .replace('__EVENT_GROUPS__', json.dumps(cfg.event_groups_display()))
+        .replace('__RADAR_CFG__', json.dumps(_radar_cfg()))
+        .replace('__BASE__', request.script_root)
     )
     return page, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
@@ -1060,13 +1451,15 @@ def index():
 
 @app.route('/manifest.json')
 def manifest():
-    return Response(json.dumps(_MANIFEST), mimetype='application/manifest+json',
+    return Response(json.dumps(_manifest(request.script_root)),
+                    mimetype='application/manifest+json',
                     headers={'Cache-Control': 'no-cache'})
 
 
 @app.route('/sw.js')
 def service_worker():
-    return Response(_SW, mimetype='application/javascript',
+    body = _SW.replace('__BASE__', request.script_root)
+    return Response(body, mimetype='application/javascript',
                     headers={'Service-Worker-Allowed': '/', 'Cache-Control': 'no-cache'})
 
 

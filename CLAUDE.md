@@ -53,10 +53,20 @@ runs the radio pipeline in the foreground when `RADIO_ENABLED=true`.
   (new ETN = new alert).
 - Match+write run inside `BEGIN IMMEDIATE`; notification is claimed
   atomically (`notified_at IS NULL` update) so exactly one source notifies.
-- Merges fill null fields only (radio never overwrites rich text), union
-  fips/ugc, extend expiry on CON/EXT, expire the row on CAN/EXP/UPG.
-  A merge never re-notifies, except one map follow-up when geometry arrives
-  after notification (`NOTIFY_MAP_FOLLOWUP`).
+- Merges union fips/ugc, extend expiry on CON/EXT, expire the row on
+  CAN/EXP/UPG. Radio fills null fields only (never overwrites rich text);
+  rich sources (NWWS/API) also *overwrite* revised content
+  (`_CONTENT`: headline/description/instruction/geometry/severity) when NWS
+  reissues an alert in place. A true revision (a prior non-null value changed)
+  is snapshotted into the `revisions` JSON (newest-capped by
+  `REVISION_HISTORY_MAX`) and bumps `update_count`/`updated_at`; the dashboard
+  shows an UPDATED badge + collapsed revision history.
+- A merge re-notifies only when `RENOTIFY_ON_UPDATE` (off | escalation | all,
+  default escalation) matches a content revision — escalation = severity rank
+  rise or newly-added "Tornado Emergency"/"Particularly Dangerous Situation"
+  wording — throttled by `RENOTIFY_MIN_INTERVAL_SECS` (clock: `renotified_at`).
+  Otherwise a merge stays silent, except one map follow-up when geometry
+  arrives after notification (`NOTIFY_MAP_FOLLOWUP`).
 - Radio decodes touch `/tmp/last_decode` (silence clock) and `/tmp/poll_now`
   (immediate API enrichment poll).
 
