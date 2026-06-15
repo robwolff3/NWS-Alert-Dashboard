@@ -999,7 +999,7 @@ const PAGE_SIZE = 3;
 
 // Test-category alerts: the demo "Send test alert" rows plus the weekly/monthly
 // test EAS products. "Hide test alerts" hides all of these and the send button.
-const TEST_EEE = new Set(['RWT', 'RMT', 'NPT', 'NST', 'NAT', 'DMO']);
+const TEST_EEE = new Set(__TEST_EEE__);
 const isTestAlert = a => !!a.is_test || TEST_EEE.has(a.eee);
 
 function applyTestUI() {
@@ -1459,6 +1459,24 @@ def _json_for_script(obj):
     return json.dumps(obj).replace('</', '<\\/').replace('<!--', '<\\!--')
 
 
+def _notifiable_event_groups():
+    """Event groups for the web push picker, limited to codes the global
+    NOTIFY_EVENT_CODES gate actually lets through (empty gate = all). A code
+    absent from the gate can never web-push, so offering it in the
+    per-subscription picker is misleading — e.g. the broadcast test codes,
+    which are excluded from the default gate."""
+    import config as cfg
+    allowed = cfg.notify_event_codes()
+    if not allowed:
+        return cfg.event_groups_display()
+    out = []
+    for group, codes in cfg.event_groups_display():
+        kept = [cn for cn in codes if cn[0] in allowed]
+        if kept:
+            out.append([group, kept])
+    return out
+
+
 @app.route('/')
 def index():
     import config as cfg
@@ -1468,7 +1486,8 @@ def index():
         .replace('__FOOTER__',   _html.escape(SITE_FOOTER))
         .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
         .replace('__LIVE_PLAYER__', _LIVE_PLAYER_HTML if RADIO_ENABLED else '')
-        .replace('__EVENT_GROUPS__', _json_for_script(cfg.event_groups_display()))
+        .replace('__EVENT_GROUPS__', _json_for_script(_notifiable_event_groups()))
+        .replace('__TEST_EEE__', _json_for_script(sorted(cfg.TEST_EEE)))
         .replace('__RADAR_CFG__', _json_for_script(_radar_cfg()))
         .replace('__BASE__', _base_prefix())
     )

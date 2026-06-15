@@ -10,15 +10,13 @@ set -euo pipefail
 python3 /app/scripts/autosetup.py || true
 [ -f /tmp/derived_env.sh ] && . /tmp/derived_env.sh
 
-# ── Cross-source filters (dsame3 pre-filters the radio path) ─────────────────
+# ── Radio decode pre-filter (dsame3 only decodes matching SAME headers) ──────
+# SAME (geographic) codes pre-filter the radio path. Event type is NOT
+# pre-filtered: radio decodes every event, the shared NOTIFY_EVENT_CODES gate
+# decides what notifies, and RADIO_RECORD_TESTS controls test-audio recording.
 SAME_ARGS=()
 if [ -n "${FILTER_SAME_CODES:-}" ]; then
     SAME_ARGS=(--same ${FILTER_SAME_CODES})
-fi
-
-EVENT_ARGS=()
-if [ -n "${FILTER_EVENT_CODES:-}" ]; then
-    EVENT_ARGS=(--event ${FILTER_EVENT_CODES})
 fi
 
 RADIO_ENABLED="${RADIO_ENABLED:-true}"
@@ -30,7 +28,8 @@ echo "  Radio source : ${RADIO_ENABLED}"
 echo "  NWWS-OI      : ${NWWS_ENABLED}"
 echo "  API poller   : ${API_ENABLED}"
 echo "  SAME codes   : ${FILTER_SAME_CODES:-all}"
-echo "  Event codes  : ${FILTER_EVENT_CODES:-all}"
+echo "  Notify events: ${NOTIFY_EVENT_CODES:-all}"
+echo "  Record tests : ${RADIO_RECORD_TESTS:-false}"
 
 # Warn about pre-rearchitecture env var names still set
 python3 -c "import sys; sys.path.insert(0, '/app/scripts'); import config; config.warn_old_vars()"
@@ -137,7 +136,6 @@ while true; do
         tee -a /tmp/multimon.log | \
         python /app/dsame3/dsame.py \
             "${SAME_ARGS[@]}" \
-            "${EVENT_ARGS[@]}" \
             --skip_dependency \
             --call /app/scripts/notify.py \
             --command "{ORG}" "{EEE}" "{PSSCCC}" "{TTTT}" "{JJJHHMM}" "{LLLLLLLL}" "{event}" "{MESSAGE}" \

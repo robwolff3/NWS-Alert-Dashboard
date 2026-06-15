@@ -14,6 +14,14 @@
 # ~RADIO_EOM_TRAIL_SECS) an audio file under /alerts/audio/.
 set -euo pipefail
 
+# The injected event is an RWT (a broadcast test). RWT is excluded from the
+# default NOTIFY_EVENT_CODES and skipped for audio recording, so force both on
+# here — overriding any value inherited from the container env — to exercise the
+# full notify + audio path end to end. Prepend RWT so the gate admits it while
+# keeping the rest of the configured list intact.
+export NOTIFY_EVENT_CODES="RWT${NOTIFY_EVENT_CODES:+ $NOTIFY_EVENT_CODES}"
+export RADIO_RECORD_TESTS=true
+
 echo "Injecting synthetic RWT through the decode pipeline..."
 
 python3 /app/scripts/tests/gen_same.py | \
@@ -22,7 +30,6 @@ python3 /app/scripts/tests/gen_same.py | \
     tee -a /tmp/multimon.log | \
     python /app/dsame3/dsame.py \
         ${FILTER_SAME_CODES:+--same ${FILTER_SAME_CODES}} \
-        ${FILTER_EVENT_CODES:+--event ${FILTER_EVENT_CODES}} \
         --skip_dependency \
         --call /app/scripts/notify.py \
         --command "{ORG}" "{EEE}" "{PSSCCC}" "{TTTT}" "{JJJHHMM}" "{LLLLLLLL}" "{event}" "{MESSAGE}" \

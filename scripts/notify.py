@@ -77,6 +77,12 @@ def main():
     if not alert_id:
         return
 
+    # Routine broadcast tests (weekly/monthly tests, etc.) still ingest so the
+    # dashboard can show them on demand, but skip the audio recording unless
+    # RADIO_RECORD_TESTS is set — no point keeping a WAV of every weekly test.
+    if config.is_test_eee(eee) and not config.env_bool('RADIO_RECORD_TESTS', False):
+        return
+
     # Extract the broadcast audio in the background (detached so the dsame3
     # pipeline isn't blocked while we wait for the EOM marker).
     subprocess.Popen(

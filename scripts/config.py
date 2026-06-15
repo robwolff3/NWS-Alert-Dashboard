@@ -32,7 +32,8 @@ _RENAMED_VARS = {
     'HEADER_LEAD_SECS': 'RADIO_HEADER_LEAD_SECS',
     'EOM_TRAIL_SECS': 'RADIO_EOM_TRAIL_SECS',
     'SAME_CODES': 'FILTER_SAME_CODES',
-    'EVENT_CODES': 'FILTER_EVENT_CODES',
+    'EVENT_CODES': 'NOTIFY_EVENT_CODES',
+    'FILTER_EVENT_CODES': 'NOTIFY_EVENT_CODES',
     'PRIORITY_5_CODES': 'NOTIFY_PRIORITY_5_CODES',
     'PRIORITY_4_CODES': 'NOTIFY_PRIORITY_4_CODES',
     'PRIORITY_3_CODES': 'NOTIFY_PRIORITY_3_CODES',
@@ -335,6 +336,20 @@ def event_groups_display():
             for g, codes in EVENT_GROUPS]
 
 
+# SAME event codes that are routine broadcast tests, not real alerts. Single
+# source of truth shared by the web "hide tests" toggle (web.py) and the radio
+# audio-recording gate (notify.py + RADIO_RECORD_TESTS). These are excluded from
+# the default NOTIFY_EVENT_CODES so they ingest + show on demand but never
+# notify; keep this in sync with the 'Tests & Administrative' group above (minus
+# ADR, which is an administrative message rather than a test).
+TEST_EEE = frozenset({'RWT', 'RMT', 'NPT', 'NST', 'NAT', 'DMO'})
+
+
+def is_test_eee(eee) -> bool:
+    """True if the SAME event code is a routine broadcast test."""
+    return eee in TEST_EEE
+
+
 # State/territory USPS abbreviation → 2-digit FIPS, for UGC↔FIPS conversion.
 STATE_ABBR_TO_FIPS = {
     'AL': '01', 'AK': '02', 'AZ': '04', 'AR': '05', 'CA': '06', 'CO': '08',
@@ -395,9 +410,11 @@ def filter_same_codes():
     return {normalize_same(c) for c in env_list('FILTER_SAME_CODES')}
 
 
-def filter_event_codes():
-    """Accepted EEE codes. Empty = accept all."""
-    return set(env_list('FILTER_EVENT_CODES'))
+def notify_event_codes():
+    """EEE codes allowed to notify (the notification gate). Empty = notify all.
+    Not a capture/visibility filter — every ingested alert shows on the
+    dashboard regardless; this only gates Apprise/web push/MQTT."""
+    return set(env_list('NOTIFY_EVENT_CODES'))
 
 
 def filter_zones():
