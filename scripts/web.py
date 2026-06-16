@@ -123,6 +123,7 @@ def _radar_cfg():
                               'https://mesonet.agron.iastate.edu/cache/tile.py/'
                               '1.0.0/ridge::USCOMP-N0Q-{stamp}/{z}/{x}/{y}.png'),
         'stepMin':    cfg.env_int('RADAR_STEP_MIN', 5),
+        'lookbackMin': cfg.env_int('RADAR_LOOKBACK_MIN', 20),
         'maxFrames':  cfg.env_int('RADAR_MAX_FRAMES', 24),
         'opacity':    opacity,
         'frameMs':    cfg.env_int('RADAR_FRAME_MS', 450),
@@ -803,12 +804,16 @@ function _stamp(t) {
 // Build the list of 5-min frame epochs from event onset to its end. For active
 // alerts the end trails 'now' by the IEM publish latency; coarsen the step (in
 // whole 5-min multiples, so frames stay on valid IEM slots) if the count would
-// exceed maxFrames.
+// exceed maxFrames. We always reach back at least lookbackMin before the end so
+// a just-issued alert (onset ≈ now) still animates instead of showing a single
+// static frame.
 function radarFrames(a, active) {
   const base = (RADAR.stepMin || 5) * 60;
-  const start = Math.floor((a.onset || a.alert_time) / base) * base;
   let end = active ? (Date.now() / 1000 - (RADAR.latencySec || 300))
                    : (a.expires_at || a.alert_time);
+  let start = Math.floor((a.onset || a.alert_time) / base) * base;
+  const lookback = (RADAR.lookbackMin || 20) * 60;
+  start = Math.min(start, Math.floor((end - lookback) / base) * base);
   end = Math.max(end, start);
   let step = base;
   const max = RADAR.maxFrames || 24;
