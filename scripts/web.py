@@ -125,6 +125,7 @@ def _radar_cfg():
         'stepMin':    cfg.env_int('RADAR_STEP_MIN', 5),
         'lookbackMin': cfg.env_int('RADAR_LOOKBACK_MIN', 20),
         'maxFrames':  cfg.env_int('RADAR_MAX_FRAMES', 24),
+        'maxSpanHours': cfg.env_int('RADAR_MAX_SPAN_HOURS', 2),
         'opacity':    opacity,
         'frameMs':    cfg.env_int('RADAR_FRAME_MS', 450),
         'dwellMs':    cfg.env_int('RADAR_DWELL_MS', 1400),
@@ -333,6 +334,10 @@ section + section{margin-top:2rem}
 }
 .event-name{font-size:1rem;font-weight:700}
 .card-meta{font-size:.8rem;font-weight:600;white-space:nowrap}
+@media (max-width:480px){
+  /* Title and time frame collide on narrow screens — stack the time below. */
+  .card-header{flex-direction:column;align-items:flex-start;gap:.2rem}
+}
 .badge{
   display:inline-block;font-size:.6rem;font-weight:700;
   padding:.1rem .35rem;border-radius:.25rem;margin-right:.4rem;
@@ -372,6 +377,9 @@ section + section{margin-top:2rem}
   color:var(--muted);margin:.25rem 0 0;
 }
 .expires{font-size:.65rem;color:var(--muted);margin-bottom:.5rem}
+.alert-technical{margin-top:.6rem}
+.src-badges{margin-top:.4rem}
+.src-badges .src-badge:first-child{margin-left:0}
 .eee{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;font-family:monospace}
 .header-msg{
   font-size:.75rem;color:var(--muted);margin-bottom:.75rem;
@@ -431,7 +439,7 @@ section + section{margin-top:2rem}
   border:1px solid #3b82f6;border-radius:.2rem;padding:.05rem .3rem;flex-shrink:0;
 }
 .home-pin{background:none;border:none}
-.home-pin svg{display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
+.home-pin svg{display:block;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff)}
 audio{width:100%;margin-top:.6rem;height:2rem}
 .empty{
   text-align:center;color:var(--muted);padding:2.5rem;
@@ -650,14 +658,35 @@ function srcBadges(a) {
   }).join('');
 }
 
+function technicalHtml(a) {
+  // SAME/EEE header fields — technical, shown at the bottom of the full text.
+  const rows = [];
+  if (a.eee) rows.push(`<div class="eee">EEE: ${esc(a.eee)}</div>`);
+  // header_message is the raw SAME header for radio; for rich sources it falls
+  // back to the event name, which the card already shows — skip that duplicate.
+  const hdr = (a.header_message || '').trim();
+  if (hdr && hdr.toLowerCase() !== (a.event_name || '').trim().toLowerCase()) {
+    rows.push(`<div class="header-msg">${esc(hdr)}</div>`);
+  }
+  const badges = srcBadges(a);
+  if (badges) rows.push(`<div class="src-badges">${badges}</div>`);
+  return rows.length ? `<div class="alert-technical">${rows.join('')}</div>` : '';
+}
+
 function detailsHtml(a) {
   const head = a.headline ? `<div class="headline">${esc(a.headline)}</div>` : '';
+  const tech = technicalHtml(a);
   let body = '';
   if (a.description) {
     const instr = a.instruction
       ? '\n\nPRECAUTIONARY/PREPAREDNESS ACTIONS:\n\n' + a.instruction : '';
-    body = `<details class="alert-details"><summary>Full alert text</summary>` +
-           `<pre class="alert-text">${esc(a.description + instr)}</pre></details>`;
+    body = `<details class="alert-details" data-fulltext="${esc(a.id)}">` +
+           `<summary>Full alert text</summary>` +
+           `<pre class="alert-text">${esc(a.description + instr)}</pre>` +
+           tech + `</details>`;
+  } else {
+    // No full text panel — keep the technical header visible inline.
+    body = tech;
   }
   return head + body;
 }
@@ -762,6 +791,21 @@ function restoreOpenMaps(ids) {
   });
 }
 
+// Preserve which text/revision panels are expanded across an SSE re-render, so a
+// background update doesn't collapse the alert the user is reading. Keyed by a
+// data-<attr> holding the alert id.
+function saveOpenPanels(attr) {
+  return Array.from(document.querySelectorAll(`[data-${attr}]`))
+    .filter(d => d.open).map(d => d.dataset[attr]);
+}
+
+function restoreOpenPanels(attr, ids) {
+  ids.forEach(id => {
+    const d = document.querySelector(`[data-${attr}="${CSS.escape(id)}"]`);
+    if (d) d.open = true;
+  });
+}
+
 // ── Home-location pin ────────────────────────────────────────────────────────
 const RADAR = window.RADAR_CFG || {};
 const _BLANK_TILE =
@@ -771,11 +815,11 @@ function addHomePin(map) {
   if (!RADAR.home) return;
   const icon = L.divIcon({
     className: 'home-pin',
-    html: '<svg viewBox="0 0 24 36" width="22" height="33">' +
-          '<path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" ' +
-          'fill="#2563eb" stroke="#fff" stroke-width="2"/>' +
-          '<circle cx="12" cy="12" r="4.5" fill="#fff"/></svg>',
-    iconSize: [22, 33], iconAnchor: [11, 33],
+    html: '<svg viewBox="0 0 384 512" width="11" height="14">' +
+          '<path d="M172.268 501.67C26.97 291.031 0 269.413 0 192 0 85.961 ' +
+          '85.961 0 192 0s192 85.961 192 192c0 77.413-26.97 99.031-172.268 ' +
+          '309.67-9.535 13.774-29.93 13.773-39.464 0z" fill="#000"/></svg>',
+    iconSize: [11, 14], iconAnchor: [5.5, 14],
   });
   L.marker(RADAR.home, {icon, interactive: true, keyboard: false})
     .bindTooltip('You are here').addTo(map);
@@ -792,6 +836,7 @@ function radarRelevant(a) {
   if (!RADAR.enabled || !RADAR.tile) return false;
   const n = a.event_name || '';
   if (/coastal flood|lakeshore flood/i.test(n)) return false;   // tidal, not radar
+  if (/\bwatch\b/i.test(n)) return false;   // long-fuse "potential", not radar-driven
   return _RADAR_RE.test(n);
 }
 
@@ -806,7 +851,11 @@ function _stamp(t) {
 // whole 5-min multiples, so frames stay on valid IEM slots) if the count would
 // exceed maxFrames. We always reach back at least lookbackMin before the end so
 // a just-issued alert (onset ≈ now) still animates instead of showing a single
-// static frame.
+// static frame. While an alert is live it always spans its whole life (onset →
+// now), so radar grows with the event. Once it's finished history, a very long
+// event (e.g. a day-plus flood warning) is capped to a trailing maxSpanHours
+// window before the end, so the loop stays a smooth, recent 5-min cadence
+// instead of a coarse slideshow across the whole duration.
 function radarFrames(a, active) {
   const base = (RADAR.stepMin || 5) * 60;
   let end = active ? (Date.now() / 1000 - (RADAR.latencySec || 300))
@@ -814,6 +863,10 @@ function radarFrames(a, active) {
   let start = Math.floor((a.onset || a.alert_time) / base) * base;
   const lookback = (RADAR.lookbackMin || 20) * 60;
   start = Math.min(start, Math.floor((end - lookback) / base) * base);
+  if (!active) {
+    const maxSpan = (RADAR.maxSpanHours || 2) * 3600;
+    start = Math.max(start, Math.floor((end - maxSpan) / base) * base);
+  }
   end = Math.max(end, start);
   let step = base;
   const max = RADAR.maxFrames || 24;
@@ -961,7 +1014,7 @@ function revisionsHtml(a) {
       ${prior}
     </div>`;
   }).join('');
-  return `<details class="revisions">
+  return `<details class="revisions" data-revisions="${esc(a.id)}">
     <summary>Revision history (${revs.length})</summary>${entries}
   </details>`;
 }
@@ -970,20 +1023,20 @@ function card(a, active) {
   const pc = PC(a.priority);
   const activeBadge = active
     ? `<span class="active-badge">ACTIVE</span>` : '';
+  // Active alerts show a live countdown; history rows already carry the
+  // expiry time in the time-range header, so no redundant "Expired" line.
   const countdown = active && a.expires_at
     ? `<div class="expires" data-expires="${a.expires_at}">${fmtCountdown(a.expires_at)}</div>`
-    : (a.expires_at ? `<div class="expires">Expired ${fmtTime(a.expires_at)}</div>` : '');
+    : '';
   return `
   <div class="card ${pc}${active ? ' active' : ''}${a.is_test ? ' test' : ''}">
     <div class="card-header">
       <span class="event-name">
-        <span class="badge">${PL(a.priority)}</span>${esc(a.event_name)}${activeBadge}${updatedBadge(a)}${srcBadges(a)}
+        <span class="badge">${PL(a.priority)}</span>${esc(a.event_name)}${activeBadge}${updatedBadge(a)}
       </span>
       <span class="card-meta">${fmtTimeRange(a.alert_time, a.expires_at)}</span>
     </div>
     ${countdown}
-    <div class="eee">EEE: ${esc(a.eee)}</div>
-    <div class="header-msg">${esc(a.header_message)}</div>
     ${detailsHtml(a)}
     ${mapHtml(a, active)}
     ${revisionsHtml(a)}
@@ -1152,6 +1205,8 @@ function render(alerts) {
 
   const saved = saveAudioStates();
   const openMaps = saveOpenMaps();
+  const openText = saveOpenPanels('fulltext');
+  const openRevs = saveOpenPanels('revisions');
   destroyMaps();
 
   document.getElementById('active').innerHTML = active.length
@@ -1161,6 +1216,8 @@ function render(alerts) {
   renderHistory(getHistory());
   restoreAudioStates(saved);
   restoreOpenMaps(openMaps);
+  restoreOpenPanels('fulltext', openText);
+  restoreOpenPanels('revisions', openRevs);
   initOpenMaps();   // active-alert maps render expanded by default
 }
 
