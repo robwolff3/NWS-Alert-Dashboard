@@ -2,9 +2,15 @@
 # Docker Compose merges this with compose.yaml automatically.
 services:
   nwsalertdashboard:
-    # RTL-SDR dongle passthrough (find yours: lsusb | grep -i rtl)
-    devices:
-      - ${RTL_DEVICE}:${RTL_DEVICE}
+    # RTL-SDR dongle passthrough (confirm it's present: lsusb | grep -i rtl).
+    # Bind the whole USB tree + allow all USB char devices (major 189) instead
+    # of pinning one /dev/bus/usb/<bus>/<dev> node: libusb opens the real
+    # sysfs-derived path, which changes on replug/reboot, so a fixed node (or a
+    # udev symlink to it) breaks on re-enumeration. This survives renumbering.
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+    device_cgroup_rules:
+      - 'c 189:* rmw'
     # Attach to an existing reverse-proxy network instead of the default:
     # networks:
     #   - proxynet
