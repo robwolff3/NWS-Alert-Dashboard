@@ -18,6 +18,7 @@ from pathlib import Path
 import html as _html
 from flask import Flask, jsonify, request, send_file, abort, Response, stream_with_context
 import alerts as alertdb
+import fips_lookup
 import push as pushdb
 
 app = Flask(__name__)
@@ -376,6 +377,14 @@ section + section{margin-top:2rem}
   white-space:pre-wrap;font-family:inherit;font-size:.72rem;line-height:1.5;
   color:var(--muted);margin:.25rem 0 0;
 }
+.card-footer{display:flex;justify-content:flex-end;margin-top:.6rem}
+.delete-btn{
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  padding:.25rem .6rem;border-radius:.25rem;font-size:.7rem;font-weight:600;
+  font-family:inherit;cursor:pointer;
+}
+.delete-btn:hover{border-color:#dc2626;color:#dc2626}
+.delete-btn:disabled{opacity:.5;cursor:default}
 .expires{font-size:.65rem;color:var(--muted);margin-bottom:.5rem}
 .alert-technical{margin-top:.6rem}
 .src-badges{margin-top:.4rem}
@@ -383,7 +392,7 @@ section + section{margin-top:2rem}
 .eee{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;font-family:monospace}
 .header-msg{
   font-size:.75rem;color:var(--muted);margin-bottom:.75rem;
-  word-break:break-all;font-family:monospace;
+  word-break:break-all;font-family:monospace;white-space:pre-line;
 }
 .transcript-wrap{
   margin-top:.75rem;padding-top:.75rem;
@@ -406,6 +415,10 @@ section + section{margin-top:2rem}
 .src-test{border-color:#f59e0b;color:#fbbf24}
 .card.test{border-style:dashed;opacity:.85}
 .headline{font-size:.85rem;font-weight:600;margin:.5rem 0;line-height:1.4}
+.areas-line{
+  font-size:.75rem;font-weight:700;letter-spacing:.1em;
+  color:var(--muted);margin:.2rem 0;
+}
 .alert-details{margin-top:.5rem}
 .alert-details summary{
   font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
@@ -673,8 +686,15 @@ function technicalHtml(a) {
   return rows.length ? `<div class="alert-technical">${rows.join('')}</div>` : '';
 }
 
+function headlineHtml(a) {
+  const headline = (a.headline || '').trim();
+  const headDiv  = headline ? `<div class="headline">${esc(headline)}</div>` : '';
+  const areasDiv = a.areas ? `<div class="areas-line">${esc(a.areas)}</div>` : '';
+  return headDiv + areasDiv;
+}
+
 function detailsHtml(a) {
-  const head = a.headline ? `<div class="headline">${esc(a.headline)}</div>` : '';
+  const head = headlineHtml(a);
   const tech = technicalHtml(a);
   let body = '';
   if (a.description) {
@@ -1041,7 +1061,29 @@ function card(a, active) {
     ${mapHtml(a, active)}
     ${revisionsHtml(a)}
     ${voiceHtml(a)}
+    <div class="card-footer">
+      <button class="delete-btn" onclick="deleteAlert('${esc(a.id)}', this)">Delete</button>
+    </div>
   </div>`;
+}
+
+async function deleteAlert(id, btn) {
+  if (!confirm('Delete this alert? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${APP_BASE}/api/alerts/${encodeURIComponent(id)}`, {method: 'DELETE'});
+    if (!r.ok) {
+      btn.disabled = false;
+      alert('Failed to delete alert.');
+      return;
+    }
+    // The SSE stream re-pushes the snapshot once the DB signal fires, but
+    // remove it from the local view immediately for a snappy response.
+    render(allAlerts.filter(a => a.id !== id));
+  } catch (_) {
+    btn.disabled = false;
+    alert('Failed to delete alert.');
+  }
 }
 
 function tickCountdowns() {
@@ -1687,12 +1729,23 @@ def status():
     })
 
 
+def _with_areas(alert: dict) -> dict:
+    """Attach 'areas' — reverse-FIPS county listing, e.g. 'KY - Clark, Madison'
+    — for the dashboard to show after the full alert text."""
+    alert['areas'] = fips_lookup.format_grouped(json.loads(alert['fips'])) if alert.get('fips') else ''
+    return alert
+
+
+def _alerts_json(limit=200):
+    return [_with_areas(a) for a in alertdb.get_alerts(limit)]
+
+
 @app.route('/events')
 def events():
     @stream_with_context
     def generate():
         # Send current snapshot immediately so the page loads with data
-        yield f'data: {json.dumps(alertdb.get_alerts(200))}\n\n'
+        yield f'data: {json.dumps(_alerts_json())}\n\n'
         try:
             last_mtime = os.path.getmtime('/tmp/alerts_updated')
         except OSError:
@@ -1707,7 +1760,7 @@ def events():
                 mtime = None
             if mtime != last_mtime:
                 last_mtime = mtime
-                yield f'data: {json.dumps(alertdb.get_alerts(200))}\n\n'
+                yield f'data: {json.dumps(_alerts_json())}\n\n'
             elif tick % 15 == 0:
                 yield 'event: ping\ndata: 1\n\n'  # keep-alive (named so the client can react)
     return Response(generate(), mimetype='text/event-stream',
@@ -1716,7 +1769,7 @@ def events():
 
 @app.route('/api/alerts')
 def list_alerts():
-    return jsonify(alertdb.get_alerts(200))
+    return jsonify(_alerts_json())
 
 
 @app.route('/api/alerts/<alert_id>')
@@ -1724,7 +1777,14 @@ def get_alert(alert_id):
     alert = alertdb.get_alert(alert_id)
     if not alert:
         abort(404)
-    return jsonify(alert)
+    return jsonify(_with_areas(alert))
+
+
+@app.route('/api/alerts/<alert_id>', methods=['DELETE'])
+def delete_alert(alert_id):
+    if not alertdb.delete_alert(alert_id):
+        abort(404)
+    return jsonify({'ok': True})
 
 
 def _safe_path(base, filename):

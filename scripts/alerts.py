@@ -238,6 +238,27 @@ def get_alert(alert_id):
     return dict(row) if row else None
 
 
+def delete_alert(alert_id) -> bool:
+    """Remove an alert row (and its audio/map files). True if a row was deleted."""
+    init_db()
+    with _conn() as c:
+        row = c.execute(
+            'SELECT audio_file, map_file FROM alerts WHERE id=?', (alert_id,)
+        ).fetchone()
+        if not row:
+            return False
+        for d, f in ((AUDIO_DIR, row['audio_file']), (MAPS_DIR, row['map_file'])):
+            if f:
+                try:
+                    (Path(d) / f).unlink()
+                except OSError:
+                    pass
+        c.execute('DELETE FROM alerts WHERE id=?', (alert_id,))
+        c.commit()
+    _signal()
+    return True
+
+
 def cleanup():
     """Purge old audio/map files, expired test alerts, and old DB records."""
     audio_days = int(os.environ.get('AUDIO_RETAIN_DAYS', '365'))

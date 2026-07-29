@@ -32,6 +32,7 @@ from typing import Optional
 sys.path.insert(0, '/app/scripts')
 import alerts as alertdb
 import config
+import fips_lookup
 import notifier
 import push as pushdb
 
@@ -238,10 +239,20 @@ def _publish_mqtt(alert_row: dict, kind: str):
         print(f'ingest: mqtt publish failed: {e}', flush=True)
 
 
+def _areas_line(alert_row: dict) -> str:
+    """Reverse-FIPS county listing for the alert's affected area, e.g.
+    'KY - Clark, Fayette, Madison'. Empty string if fips is unset/unknown."""
+    if not alert_row.get('fips'):
+        return ''
+    return fips_lookup.format_grouped(json.loads(alert_row['fips']))
+
+
 def _notify(alert_row: dict):
     title = alert_row['event_name']
-    body  = (alert_row.get('headline') or alert_row.get('header_message')
-             or alert_row['event_name'])
+    body  = alert_row.get('headline') or ''
+    areas = _areas_line(alert_row)
+    if areas:
+        body = f'{areas}\n\n{body}' if body else areas
     if alert_row.get('is_test'):
         title = f'[TEST] {title}'
 
