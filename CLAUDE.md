@@ -74,6 +74,10 @@ runs the radio pipeline in the foreground when `RADIO_ENABLED=true`.
 
 - Base image pins `rtl-sdr 0.6.0-3` from Debian bullseye — the newer
   RTL-SDR Blog fork silently ignores `-E deemp` (breaks FM de-emphasis).
+  The `.deb` arch comes from `dpkg --print-architecture`, never a literal:
+  the image supports linux/amd64 and linux/arm64, and hardcoding `amd64`
+  is what broke ARM builds. 32-bit ARM is unsupported (no numpy/Pillow
+  wheels for `armv7l`).
 - dsame3 is cloned+patched at build time (EOF handling, stdin default,
   faster_whisper import). Its `--command` placeholders feed notify.py:
   `{ORG} {EEE} {PSSCCC} {TTTT} {JJJHHMM} {LLLLLLLL} {event} {MESSAGE}`.
