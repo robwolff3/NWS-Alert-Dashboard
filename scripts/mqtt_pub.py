@@ -42,7 +42,7 @@ def _row_payload(row: dict, kind: str) -> dict:
     out['kind'] = kind
     out['has_geometry'] = bool(row.get('geometry'))
     # Human-readable counties alongside the raw SAME codes, never instead of
-    # them — templates want the codes, notification text wants the names.
+    # them: templates want the codes, notification text wants the names.
     out['areas'] = (fips_lookup.format_grouped_cached(row['fips'])
                     if row.get('fips') else '')
     return out

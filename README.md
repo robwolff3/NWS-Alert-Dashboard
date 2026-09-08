@@ -8,15 +8,15 @@ A self-hosted National Weather Service alert monitor with **three independent al
 | **NOAA Weather Radio** | RTL-SDR receiving NWR broadcasts (SAME/EAS decode) | seconds | **yes** | ~$30 RTL-SDR dongle |
 | **NOAA REST API** | api.weather.gov polling | ≤ poll interval | no | nothing |
 
-The same warning usually arrives on all three. The **ingest core** dedups them (VTEC event tracking plus SAME county/time heuristics), notifies **exactly once** via whichever source delivered first, and folds the richer details (headline, full text, storm polygon) into one alert record as they land. This multi-sourcing can lead to getting an alert seconds or minutes faster.
+The same warning usually arrives on all three. The **ingest core** dedups them (VTEC event tracking plus SAME county/time heuristics), notifies **exactly once** via whichever source delivered first, and folds the richer details (headline, full text, storm polygon) into one alert record as they land. You get the alert as soon as the fastest source delivers it.
 
 **If your internet goes down, the radio path keeps working.** Alerts are decoded off the air, the broadcast audio is recorded, and the map falls back to locally cached county boundaries. Nothing in the warning path depends on the cloud.
 
-One thing to plan for in that offline case: push and web-push notifications still travel over your network, so a phone or tablet only receives them while it is on the same LAN as the container. Many phones automatically drop a Wi-Fi network once they detect it has no internet access, which quietly stops those notifications from arriving. If you are counting on the radio path during an outage, keep a device pinned to the local network (or just watch the dashboard directly), and treat a battery-backed weather radio as the real backstop.
+Push notifications still travel over your network, so a phone only receives them while it is on the same LAN as the container, and many phones drop a Wi-Fi network once they detect it has no internet. If you are counting on the radio path during an outage, pin a device to the local network or watch the dashboard directly, and keep a battery-backed weather radio as the real backstop.
 
 > [!WARNING]
 > **Unofficial project. Not affiliated with, endorsed by, or supported by NOAA or the National Weather Service.**
-> Treat it as a *supplementary* monitor, **never your only source of life-safety warnings.** Software, hardware, radio reception, and network links can and do fail, delay, drop, or misreport alerts. Always keep an official channel: a battery-backed NWR/SAME weather radio, Wireless Emergency Alerts (WEA) on your phone, outdoor sirens, and local media. Provided **with no warranty**. See [Disclaimer](#disclaimer) and [LICENSE](LICENSE).
+> Treat it as a *supplementary* monitor, **never your only source of life-safety warnings.** Software, hardware, radio reception, and network links can and do fail, delay, drop, or misreport alerts. Provided **with no warranty**. See [Disclaimer](#disclaimer) and [LICENSE](LICENSE).
 
 ## Screenshots
 
@@ -31,7 +31,7 @@ One thing to plan for in that offline case: push and web-push notifications stil
 ## Features
 
 - **Web dashboard** (PWA): live-updating (SSE) active and historical alerts with source badges (RADIO / NWWS / API), full alert text, broadcast recordings, a live radio stream, searchable history, and interactive Leaflet maps served from a **local tile cache**. Light and dark themes, plus per-source health chips (tuned frequency, NWWS, API) that show at a glance when a source is down.
-- **Animated radar**: per-alert maps overlay time-correct NEXRAD radar for precip/convective events — looping across the event while it's active and replaying its timeframe afterward — with a pin marking your location. Online enrichment only; the offline notification maps are untouched.
+- **Animated radar**: per-alert maps overlay time-correct NEXRAD radar for precip/convective events, looping across the event while it's active and replaying its timeframe afterward, with a pin marking your location. Online enrichment only; the offline notification maps are untouched.
 - **Alert updates**: in-place NWS revisions (reworded text, a tightened polygon, raised severity) update the alert and are flagged with an **UPDATED** badge and a collapsed revision history; optional re-notification on escalation (`RENOTIFY_ON_UPDATE`).
 - **Broad event coverage**: all SAME/EAS codes plus common non-EAS advisories (excessive heat, extreme cold, red flag, dense fog, wind, and so on) that only arrive via the API or NWWS sources. See the full [event reference](EVENTS.md); tune the set in `NOTIFY_EVENT_CODES`.
 - **Alert maps**: a per-alert PNG rendered offline (Pillow over cached OSM tiles) and attached to notifications, with the storm polygon when available and county boundaries otherwise.
@@ -44,13 +44,13 @@ One thing to plan for in that offline case: push and web-push notifications stil
 
 Docker and Docker Compose on **linux/amd64** or **linux/arm64**. The image builds
 natively on both, so a Raspberry Pi 4/5 running a 64-bit OS, an ARM VPS, or Apple
-silicon works the same as an x86 host — there is nothing to pick at build time, and
-the compose file is identical. Expect the first build to take noticeably longer on a
+silicon works the same as an x86 host. There is nothing to pick at build time and
+the compose file is identical, though the first build takes noticeably longer on a
 Pi, since multimon-ng is compiled in-image.
 
 32-bit ARM (`armhf` / `armv7l`, e.g. Raspberry Pi OS 32-bit) is **not** supported:
 NumPy and Pillow ship no 32-bit ARM wheels, so pip falls back to long source builds
-needing toolchain packages the image does not carry. Reflash with the 64-bit OS —
+needing toolchain packages the image does not carry. Reflash with the 64-bit OS;
 `uname -m` should print `aarch64`.
 
 To cross-build on a faster x86 machine for a Pi, buildx with QEMU works:
@@ -61,21 +61,20 @@ docker buildx build --platform linux/arm64 -t nwsalertdashboard:arm64 .
 
 ### Windows
 
-Docker Desktop (WSL2 backend) runs the internet-only setup — NWWS-OI plus the REST
-API — with no changes to the compose file. Two things are worth getting right up
-front:
+Docker Desktop (WSL2 backend) runs the internet-only setup (NWWS-OI plus the REST
+API) with no changes to the compose file. Two things to get right up front:
 
 - **Clone inside the WSL2 filesystem, not `C:\`.** The alert store is SQLite in WAL
   mode, and WAL depends on file locking that is not reliable across the Windows drive
   mount (`/mnt/c`). Keep the repo somewhere like
-  `\\wsl$\Ubuntu\home\you\NWS-Alert-Dashboard` — it is substantially faster too.
+  `\\wsl$\Ubuntu\home\you\NWS-Alert-Dashboard`, which is substantially faster too.
 - **Line endings.** Git for Windows defaults to `core.autocrlf=true`, and `run.sh`
   checked out with CRLF makes the container exit immediately with
   `bad interpreter: /bin/bash^M`. The repo ships a `.gitattributes` that forces LF, so
   a fresh clone is fine; fix an older one with `git rm --cached -r . && git reset --hard`.
 
 **The RTL-SDR source is the hard part on Windows.** Docker Desktop cannot pass a USB
-device straight through — there is no `/dev/bus/usb` on a Windows host for the
+device straight through: there is no `/dev/bus/usb` on a Windows host for the
 override file to bind. The dongle has to be bridged into WSL2 first with
 [usbipd-win](https://github.com/dorssel/usbipd-win) (`usbipd bind`, then `usbipd
 attach`), and since Docker Desktop runs the engine in its own `docker-desktop` distro
@@ -83,7 +82,7 @@ rather than your default one, the attach generally has to target that distro. It
 has to be re-attached after every reboot and every replug, which is awkward for
 something meant to run unattended.
 
-That path is **untested here** — the radio source is only verified on Linux hosts. If
+That path is **untested here**; the radio source is only verified on Linux hosts. If
 you want the offline radio path, a cheap Linux box or a Raspberry Pi is much less
 trouble. Otherwise run Windows with `RADIO_ENABLED=false`: NWWS-OI and the API need no
 hardware at all.
@@ -103,7 +102,7 @@ Open `http://host:8082`. To verify notifications and map rendering end to end, u
 
 ## Adding the radio source
 
-1. Plug in an RTL-SDR dongle (RTL2832U). Find it: `lsusb | grep -i RTL`. (On a Windows host, read [Windows](#windows) first — the dongle has to be bridged into WSL2 and that path is untested.)
+1. Plug in an RTL-SDR dongle (RTL2832U). Find it: `lsusb | grep -i RTL`. (On a Windows host, read [Windows](#windows) first: the dongle has to be bridged into WSL2 and that path is untested.)
 2. `cp compose.override.example.yaml compose.override.yaml` and set the device path; set `RTL_DEVICE` in `.env`
 3. Set `RADIO_ENABLED=true`. Leave `RADIO_FREQUENCY` blank to scan all seven NWR channels until one decodes, or set your transmitter's frequency ([transmitter search](https://www.weather.gov/nwr/station_search))
 4. `docker compose up -d --build --force-recreate`
@@ -138,13 +137,13 @@ automation:
 
 ## ntfy on Android
 
-The notification routing earns its keep with the [ntfy](https://ntfy.sh/) Android app. The dashboard tags every alert with a priority based on its event code (see the `NOTIFY_PRIORITY_*_CODES` lists in `.env.example`), and ntfy maps that priority onto Android's notification channels. The practical payoff is that alerts can behave very differently depending on how serious they are:
+Every alert carries a priority set by its event code (the `NOTIFY_PRIORITY_*_CODES` lists in `.env.example`), and the [ntfy](https://ntfy.sh/) Android app maps that priority onto Android's notification channels, so alerts can behave very differently by severity:
 
 - **Top-priority events** (tornado warning, flash flood emergency) can pop up, vibrate, and sound an alarm. In the ntfy app you can set that subscription's channel to **override Do Not Disturb**, so a 3 a.m. tornado warning still wakes you even with the phone silenced.
 - **Mid-priority events** ring or buzz the way a normal notification does.
 - **Low-priority advisories** (heat, fog, frost) can come in as **silent notifications** that land in the shade without a sound, so routine statements do not nag you.
 
-If you want even finer control, route severities onto separate topics with `NTFY_PRIORITY_*_TOPIC`. Each topic is its own subscription in the app, so you can give each one its own sound, vibration, and DnD-override setting.
+For finer control, route severities onto separate topics with `NTFY_PRIORITY_*_TOPIC`. Each topic is its own subscription in the app, so you can give each one its own sound, vibration, and DnD-override setting.
 
 ## Configuration
 
@@ -152,57 +151,59 @@ Everything is set with environment variables in `.env` (copy it from [`.env.exam
 
 | Variable | Default | What it does |
 |---|---|---|
-| `LOCATION` | — | Your `lat,lon`. Auto-derives the county SAME code, UGC zones, and the radio scan list for anything left blank below. |
+| `LOCATION` | none | Your `lat,lon`. Auto-derives the county SAME code, UGC zones, and the radio scan list for anything left blank below. |
 | `RADIO_ENABLED` | `true` | Enable the NOAA Weather Radio (RTL-SDR) source. |
 | `NWWS_ENABLED` | `false` | Enable the NWWS-OI push source (needs `NWWS_USER` / `NWWS_PASS`). |
 | `API_ENABLED` | `true` | Enable the api.weather.gov polling source. |
-| `API_USER_AGENT` | — | Contact string required by api.weather.gov; put your email here. |
+| `API_USER_AGENT` | none | Contact string required by api.weather.gov; put your email here. |
 | `FILTER_SAME_CODES` | from `LOCATION` | County SAME codes to watch (space-separated `PSSCCC`). |
 | `FILTER_ZONES` | from `LOCATION` | UGC forecast zones for zone-based products (winter storms, etc.). |
 | `NOTIFY_EVENT_CODES` | all | Event codes allowed to notify; others are stored but stay silent. |
-| `RTL_DEVICE` | — | RTL-SDR USB device path (radio only; also set in `compose.override.yaml`). |
+| `RTL_DEVICE` | none | RTL-SDR USB device path (radio only; also set in `compose.override.yaml`). |
 | `RADIO_FREQUENCY` | scan | NWR frequency in MHz; blank scans all seven channels. |
-| `NTFY_URL` / `NTFY_USER` / `NTFY_PASS` | — | ntfy server shortcut with per-priority topic routing. |
-| `NOTIFY_URLS` | — | Space-separated Apprise URLs (Discord, Telegram, email, …). |
+| `NTFY_URL` / `NTFY_USER` / `NTFY_PASS` | none | ntfy server shortcut with per-priority topic routing. |
+| `NOTIFY_URLS` | none | Space-separated Apprise URLs (Discord, Telegram, email, …). |
 | `NOTIFY_PRIORITY_{5,4,3}_CODES` | see example | Event codes mapped to each notification priority level. |
 | `MQTT_ENABLED` | `false` | Publish alert JSON to MQTT for Home Assistant. |
 | `MAP_ENABLED` | `true` | Cache tiles/boundaries and render per-alert maps offline. |
 | `RADAR_ENABLED` | `true` | Animated NEXRAD radar overlay on dashboard maps for precip/convective alerts. |
 | `RENOTIFY_ON_UPDATE` | `escalation` | Re-notify on in-place revisions: `off`, `escalation` (severity rise / PDS wording), or `all`. |
 | `WEB_PUSH_ENABLED` | `true` | Show the browser web-push controls in the dashboard. |
-| `ALLOW_DISMISS` | `false` | Allow hiding an alert from the dashboard. The app has no login — see [Restricting management endpoints](#restricting-management-endpoints). |
+| `ALLOW_DISMISS` | `false` | Allow hiding an alert from the dashboard. The app has no login; see [Restricting management endpoints](#restricting-management-endpoints). |
 | `SITE_TITLE` / `SITE_SUBTITLE` | auto | Dashboard heading; the subtitle auto-fills from `LOCATION` when blank. |
 
-See [`.env.example`](.env.example) for the complete, commented list — radio tuning, poll intervals, dedup window, map zoom/buffer, retention, and more.
+See [`.env.example`](.env.example) for the complete, commented list: radio tuning, poll intervals, dedup window, map zoom/buffer, retention, and more.
 
 ### Choosing which events notify
 
-`NOTIFY_EVENT_CODES` is an **opt-in allowlist**. Leave it blank (the default) and every event notifies; set it and only the listed event codes notify — anything else is still ingested and shown on the dashboard but stays silent. You rarely need to prune it by geography: api.weather.gov only returns alerts for the zones and county derived from your `LOCATION`, so an inland setup never receives marine or tropical alerts even with those codes left in the list. Trim it only to silence event *types* you don't want (e.g. drop the advisory-tier codes to keep just warnings). [`EVENTS.md`](EVENTS.md) lists every event code, its name, and its VTEC mapping, plus the routine informational products that are intentionally left unmapped.
+`NOTIFY_EVENT_CODES` is an **opt-in allowlist**. Leave it blank (the default) and every event notifies; set it and only the listed event codes notify. Anything else is still ingested and shown on the dashboard; it just stays silent.
+
+You rarely need to prune it by geography: api.weather.gov only returns alerts for the zones and county derived from your `LOCATION`, so an inland setup never receives marine or tropical alerts even with those codes left in the list. Trim it to silence event *types* you don't want, such as dropping the advisory-tier codes to keep just warnings. [`EVENTS.md`](EVENTS.md) lists every event code, its name, and its VTEC mapping, plus the routine informational products that are intentionally left unmapped.
 
 ### Restricting management endpoints
 
 The dashboard has **no login of its own**. Everything it serves is read-only
-except three endpoints, and if you expose it beyond your LAN you should decide
-deliberately who can reach them:
+except three endpoints:
 
 | Endpoint | What it does | Default |
 |---|---|---|
-| `POST /api/test-alert` | Injects a demo alert through the real pipeline — fires notifications to every configured target | always on |
+| `POST /api/test-alert` | Injects a demo alert through the real pipeline, firing notifications to every configured target | always on |
 | `POST /api/alerts/<id>/dismiss` | Hides an alert from the dashboard (soft flag; the row is kept) | off (`ALLOW_DISMISS`) |
 | `POST /push/subscribe` · `POST /push/unsubscribe` | Enrolls or removes a browser for web-push | always on |
 
-`ALLOW_DISMISS=false` disables the dismiss route and hides its button, which is
-the right default for a publicly reachable dashboard. It is a runtime setting,
-so changing it needs only `docker compose up -d --force-recreate`, not a
-rebuild. The other two endpoints have no such switch, so gate them at the proxy.
+`ALLOW_DISMISS=false` (the default) disables the dismiss route and hides its
+button. It is a runtime setting, so changing it needs only
+`docker compose up -d --force-recreate`, not a rebuild. The other two have no
+such switch, so gate them at the proxy if the dashboard is reachable beyond
+your LAN.
 
-Both routes require a JSON content-type, which forces a CORS preflight and
-blocks naive cross-site form or image POSTs — but that is a CSRF guard, not
-authentication. Anyone who can load the page can still call them.
+All of them require a JSON content-type, which forces a CORS preflight and
+blocks naive cross-site form or image POSTs. That is a CSRF guard, not
+authentication: anyone who can load the page can still call them.
 
-With nginx, restrict the paths by client address. `allow`/`deny` are evaluated
-against `$remote_addr`, which at the TLS-terminating edge is the real client,
-so this needs no header trust and cannot be spoofed:
+With nginx, restrict the paths by client address. `allow`/`deny` match on
+`$remote_addr`, which at the TLS-terminating edge is the real client, so this
+needs no header trust and cannot be spoofed:
 
 ```nginx
 # Regex locations take precedence over the "location /" prefix match, so this
@@ -218,22 +219,21 @@ location ~ ^/api/(test-alert|alerts/[^/]+/dismiss)$ {
 }
 ```
 
-On SWAG that whole allow/deny block is one line — `include
-/config/nginx/client-allow.conf;` — and the `proxy_pass` follows the same
+On SWAG that whole allow/deny block is one line, `include
+/config/nginx/client-allow.conf;`, and the `proxy_pass` follows the same
 `$upstream_app` / `$upstream_port` pattern as the rest of the conf.
 
-Gating the push endpoints the same way is a reasonable posture, with one
-consequence worth understanding: it means a device can only **enroll** for
-notifications while it is on your network. Delivery is unaffected — the push
+Gating the push endpoints the same way means a device can only **enroll** for
+notifications while it is on your network. Delivery is unaffected: the push
 service talks to the browser directly, so a phone that subscribed at home keeps
-receiving alerts anywhere. Restrict only `subscribe` and `unsubscribe`;
-`/push/vapid-public-key` and `/push/info` are GETs the page needs in order to
-render its notification controls at all.
+receiving alerts anywhere. Restrict only `subscribe` and `unsubscribe`; the
+page needs `/push/vapid-public-key` and `/push/info` to render its notification
+controls.
 
-If you would rather have one guard over everything, put the whole vhost behind
-HTTP basic auth or a forward-auth provider instead. Note that service-worker
-registration under basic auth is occasionally unreliable on iOS, so verify that
-push still subscribes after such a change.
+To guard everything at once, put the whole vhost behind HTTP basic auth or a
+forward-auth provider instead. Service-worker registration under basic auth is
+occasionally unreliable on iOS, so check that push still subscribes after such
+a change.
 
 ## Architecture
 
@@ -246,7 +246,9 @@ web.py (Flask: SSE dashboard, Leaflet, /tiles) ←──────────
 map_cache.py (one-time: zone GeoJSON + OSM tiles → ./alerts/mapdata)
 ```
 
-Dedup: alerts carrying VTEC (NWWS, API) match on `office.phen.sig.etn.year`; radio SAME decodes match heuristically on event equivalence (SAME-to-VTEC code mapping) plus county FIPS overlap plus a `DEDUP_WINDOW_SECS` time window. The first source to land an alert claims the notification atomically; later arrivals enrich missing fields (radio never overwrites richer text). When NWS reissues an alert in place — reworded text, a tightened polygon, raised severity — the rich sources overwrite the changed content, keep prior versions as a revision history, and optionally re-notify on escalation (`RENOTIFY_ON_UPDATE`). A radio-first alert triggers an immediate API poll, so the headline and polygon usually merge in within seconds, and a one-time map follow-up notification fires once the polygon arrives.
+Dedup: alerts carrying VTEC (NWWS, API) match on `office.phen.sig.etn.year`; radio SAME decodes match heuristically on event equivalence (SAME-to-VTEC code mapping) plus county FIPS overlap plus a `DEDUP_WINDOW_SECS` time window. The first source to land an alert claims the notification atomically; later arrivals enrich missing fields, and radio never overwrites richer text.
+
+When NWS reissues an alert in place (reworded text, a tightened polygon, raised severity) the rich sources overwrite the changed content, keep prior versions as a revision history, and optionally re-notify on escalation (`RENOTIFY_ON_UPDATE`). A radio-first alert triggers an immediate API poll, so the headline and polygon usually merge in within seconds, and a one-time map follow-up notification fires once the polygon arrives.
 
 ## Testing
 

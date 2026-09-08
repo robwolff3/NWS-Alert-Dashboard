@@ -48,8 +48,8 @@ WEB_PUSH_ENABLED = os.environ.get('WEB_PUSH_ENABLED', 'true').strip().lower() \
 
 # Dismiss toggle (default off): exposes POST /api/alerts/<id>/dismiss and the
 # per-card Dismiss button. The dashboard has no login of its own, so anyone who
-# can reach it can dismiss — enable only when the endpoint is restricted at the
-# reverse proxy. See "Restricting management endpoints" in the README.
+# can reach it can dismiss, so enable it only when the endpoint is restricted
+# at the reverse proxy. See "Restricting management endpoints" in the README.
 ALLOW_DISMISS = os.environ.get('ALLOW_DISMISS', 'false').strip().lower() \
     in ('1', 'true', 'yes', 'on')
 
@@ -1797,7 +1797,7 @@ def get_alert(alert_id):
 def dismiss_alert(alert_id):
     """Hide an alert from the dashboard (soft flag; the row is kept).
 
-    Off unless ALLOW_DISMISS is set, and unauthenticated when on — the app has
+    Off unless ALLOW_DISMISS is set, and unauthenticated when on: the app has
     no login, so restrict this path at the reverse proxy. The JSON content-type
     requirement is the same CSRF guard /api/test-alert uses.
     """
