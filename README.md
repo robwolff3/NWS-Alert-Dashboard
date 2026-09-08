@@ -40,6 +40,54 @@ One thing to plan for in that offline case: push and web-push notifications stil
 - **Location auto-setup**: set `LOCATION=lat,lon` and the county SAME code, UGC zones, and a radio frequency scan list are derived for you.
 - Frequency rotation with silence detection and primary failback, a rolling audio recorder, an Uptime Kuma heartbeat, and retention policies.
 
+## Requirements
+
+Docker and Docker Compose on **linux/amd64** or **linux/arm64**. The image builds
+natively on both, so a Raspberry Pi 4/5 running a 64-bit OS, an ARM VPS, or Apple
+silicon works the same as an x86 host — there is nothing to pick at build time, and
+the compose file is identical. Expect the first build to take noticeably longer on a
+Pi, since multimon-ng is compiled in-image.
+
+32-bit ARM (`armhf` / `armv7l`, e.g. Raspberry Pi OS 32-bit) is **not** supported:
+NumPy and Pillow ship no 32-bit ARM wheels, so pip falls back to long source builds
+needing toolchain packages the image does not carry. Reflash with the 64-bit OS —
+`uname -m` should print `aarch64`.
+
+To cross-build on a faster x86 machine for a Pi, buildx with QEMU works:
+
+```bash
+docker buildx build --platform linux/arm64 -t nwsalertdashboard:arm64 .
+```
+
+### Windows
+
+Docker Desktop (WSL2 backend) runs the internet-only setup — NWWS-OI plus the REST
+API — with no changes to the compose file. Two things are worth getting right up
+front:
+
+- **Clone inside the WSL2 filesystem, not `C:\`.** The alert store is SQLite in WAL
+  mode, and WAL depends on file locking that is not reliable across the Windows drive
+  mount (`/mnt/c`). Keep the repo somewhere like
+  `\\wsl$\Ubuntu\home\you\NWS-Alert-Dashboard` — it is substantially faster too.
+- **Line endings.** Git for Windows defaults to `core.autocrlf=true`, and `run.sh`
+  checked out with CRLF makes the container exit immediately with
+  `bad interpreter: /bin/bash^M`. The repo ships a `.gitattributes` that forces LF, so
+  a fresh clone is fine; fix an older one with `git rm --cached -r . && git reset --hard`.
+
+**The RTL-SDR source is the hard part on Windows.** Docker Desktop cannot pass a USB
+device straight through — there is no `/dev/bus/usb` on a Windows host for the
+override file to bind. The dongle has to be bridged into WSL2 first with
+[usbipd-win](https://github.com/dorssel/usbipd-win) (`usbipd bind`, then `usbipd
+attach`), and since Docker Desktop runs the engine in its own `docker-desktop` distro
+rather than your default one, the attach generally has to target that distro. It also
+has to be re-attached after every reboot and every replug, which is awkward for
+something meant to run unattended.
+
+That path is **untested here** — the radio source is only verified on Linux hosts. If
+you want the offline radio path, a cheap Linux box or a Raspberry Pi is much less
+trouble. Otherwise run Windows with `RADIO_ENABLED=false`: NWWS-OI and the API need no
+hardware at all.
+
 ## Quick start (no SDR needed)
 
 ```bash
@@ -55,14 +103,14 @@ Open `http://host:8082`. To verify notifications and map rendering end to end, u
 
 ## Adding the radio source
 
-1. Plug in an RTL-SDR dongle (RTL2832U). Find it: `lsusb | grep -i RTL`
+1. Plug in an RTL-SDR dongle (RTL2832U). Find it: `lsusb | grep -i RTL`. (On a Windows host, read [Windows](#windows) first — the dongle has to be bridged into WSL2 and that path is untested.)
 2. `cp compose.override.example.yaml compose.override.yaml` and set the device path; set `RTL_DEVICE` in `.env`
 3. Set `RADIO_ENABLED=true`. Leave `RADIO_FREQUENCY` blank to scan all seven NWR channels until one decodes, or set your transmitter's frequency ([transmitter search](https://www.weather.gov/nwr/station_search))
 4. `docker compose up -d --build --force-recreate`
 
 Reception notes: keep `RADIO_SQUELCH=0` (squelch can swallow SAME bursts), use `rtl_test -p` for the PPM correction, and expect the weekly RWT test (Wednesdays) as your end-to-end confirmation.
 
-The image pins `rtl-sdr 0.6.0-3` on purpose. The newer RTL-SDR Blog fork silently ignores `-E deemp`, which breaks FM de-emphasis on NWR.
+The image pins `rtl-sdr 0.6.0-3` on purpose. The newer RTL-SDR Blog fork silently ignores `-E deemp`, which breaks FM de-emphasis on NWR. Debian published that version for amd64, arm64 and armhf alike, and the build resolves the right one from `dpkg --print-architecture`, so the pin holds on ARM too.
 
 ## Adding NWWS-OI
 

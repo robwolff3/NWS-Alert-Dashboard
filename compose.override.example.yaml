@@ -3,6 +3,8 @@
 services:
   nwsalertdashboard:
     # RTL-SDR dongle passthrough (confirm it's present: lsusb | grep -i rtl).
+    # Linux hosts only: a Windows host has no /dev/bus/usb to bind, and needs
+    # the dongle bridged into WSL2 with usbipd-win first. See README > Windows.
     # Bind the whole USB tree + allow all USB char devices (major 189) instead
     # of pinning one /dev/bus/usb/<bus>/<dev> node: libusb opens the real
     # sysfs-derived path, which changes on replug/reboot, so a fixed node (or a

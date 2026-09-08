@@ -1,0 +1,8 @@
+# The image runs these directly, so a CRLF checkout on Windows breaks them:
+# run.sh is the container CMD and notify.py is exec'd by dsame3 --call, and
+# both fail with "bad interpreter: /bin/bash^M". Force LF regardless of the
+# checking-out platform's core.autocrlf.
+* text=auto eol=lf
+
+*.png binary
+*.ogg binary

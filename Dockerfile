@@ -14,12 +14,18 @@ RUN apt-get update && apt-get install -y \
 
 # Install rtl-sdr 0.6.0-3 from Debian bullseye archive rather than bookworm's
 # 2.0.2 (RTL-SDR Blog fork), which silently ignores the -E deemp flag.
-RUN curl -L -o /tmp/librtlsdr0.deb \
-      "http://archive.debian.org/debian/pool/main/r/rtl-sdr/librtlsdr0_0.6.0-3_amd64.deb" \
-    && curl -L -o /tmp/rtl-sdr.deb \
-      "http://archive.debian.org/debian/pool/main/r/rtl-sdr/rtl-sdr_0.6.0-3_amd64.deb" \
-    && dpkg -i /tmp/librtlsdr0.deb /tmp/rtl-sdr.deb \
-    && rm /tmp/librtlsdr0.deb /tmp/rtl-sdr.deb
+# The architecture comes from dpkg rather than a hardcoded amd64, so the same
+# Dockerfile builds on arm64 (Raspberry Pi 4/5, Apple silicon) — bullseye
+# published 0.6.0-3 for amd64, arm64 and armhf alike. curl -f matters here:
+# without it a 404 saves the error page as the .deb and dpkg fails obscurely.
+RUN set -eux; \
+    ver=0.6.0-3; \
+    arch="$(dpkg --print-architecture)"; \
+    base=http://archive.debian.org/debian/pool/main/r/rtl-sdr; \
+    curl -fL -o /tmp/librtlsdr0.deb "$base/librtlsdr0_${ver}_${arch}.deb"; \
+    curl -fL -o /tmp/rtl-sdr.deb "$base/rtl-sdr_${ver}_${arch}.deb"; \
+    dpkg -i /tmp/librtlsdr0.deb /tmp/rtl-sdr.deb; \
+    rm /tmp/librtlsdr0.deb /tmp/rtl-sdr.deb
 
 # Build multimon-ng from source — without libpulse-dev present,
 # CMake disables PulseAudio support and it reads cleanly from stdin
