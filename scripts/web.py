@@ -18,6 +18,7 @@ from pathlib import Path
 import html as _html
 from flask import Flask, jsonify, request, send_file, abort, Response, stream_with_context
 import alerts as alertdb
+import fips_lookup
 import push as pushdb
 
 app = Flask(__name__)
@@ -44,6 +45,13 @@ SITE_FOOTER   = os.environ.get('SITE_FOOTER',   '')
 # bar entirely (server still ignores any orphaned subscriptions).
 WEB_PUSH_ENABLED = os.environ.get('WEB_PUSH_ENABLED', 'true').strip().lower() \
     not in ('0', 'false', 'no', 'off')
+
+# Dismiss toggle (default off): exposes POST /api/alerts/<id>/dismiss and the
+# per-card Dismiss button. The dashboard has no login of its own, so anyone who
+# can reach it can dismiss — enable only when the endpoint is restricted at the
+# reverse proxy. See "Restricting management endpoints" in the README.
+ALLOW_DISMISS = os.environ.get('ALLOW_DISMISS', 'false').strip().lower() \
+    in ('1', 'true', 'yes', 'on')
 
 # Radio toggle: when false there is no /tmp/audio_fifo to stream, so the
 # Live Radio player is omitted from the page entirely.
@@ -376,6 +384,14 @@ section + section{margin-top:2rem}
   white-space:pre-wrap;font-family:inherit;font-size:.72rem;line-height:1.5;
   color:var(--muted);margin:.25rem 0 0;
 }
+.card-footer{display:flex;justify-content:flex-end;margin-top:.6rem}
+.dismiss-btn{
+  background:transparent;border:1px solid var(--border);color:var(--muted);
+  padding:.25rem .6rem;border-radius:.25rem;font-size:.7rem;font-weight:600;
+  font-family:inherit;cursor:pointer;
+}
+.dismiss-btn:hover{border-color:var(--muted);color:var(--text)}
+.dismiss-btn:disabled{opacity:.5;cursor:default}
 .expires{font-size:.65rem;color:var(--muted);margin-bottom:.5rem}
 .alert-technical{margin-top:.6rem}
 .src-badges{margin-top:.4rem}
@@ -383,7 +399,7 @@ section + section{margin-top:2rem}
 .eee{font-size:.65rem;color:var(--muted);margin-bottom:.5rem;font-family:monospace}
 .header-msg{
   font-size:.75rem;color:var(--muted);margin-bottom:.75rem;
-  word-break:break-all;font-family:monospace;
+  word-break:break-all;font-family:monospace;white-space:pre-line;
 }
 .transcript-wrap{
   margin-top:.75rem;padding-top:.75rem;
@@ -406,6 +422,10 @@ section + section{margin-top:2rem}
 .src-test{border-color:#f59e0b;color:#fbbf24}
 .card.test{border-style:dashed;opacity:.85}
 .headline{font-size:.85rem;font-weight:600;margin:.5rem 0;line-height:1.4}
+.areas-line{
+  font-size:.75rem;font-weight:700;letter-spacing:.1em;
+  color:var(--muted);margin:.2rem 0;
+}
 .alert-details{margin-top:.5rem}
 .alert-details summary{
   font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
@@ -673,8 +693,15 @@ function technicalHtml(a) {
   return rows.length ? `<div class="alert-technical">${rows.join('')}</div>` : '';
 }
 
+function headlineHtml(a) {
+  const headline = (a.headline || '').trim();
+  const headDiv  = headline ? `<div class="headline">${esc(headline)}</div>` : '';
+  const areasDiv = a.areas ? `<div class="areas-line">${esc(a.areas)}</div>` : '';
+  return headDiv + areasDiv;
+}
+
 function detailsHtml(a) {
-  const head = a.headline ? `<div class="headline">${esc(a.headline)}</div>` : '';
+  const head = headlineHtml(a);
   const tech = technicalHtml(a);
   let body = '';
   if (a.description) {
@@ -1041,7 +1068,32 @@ function card(a, active) {
     ${mapHtml(a, active)}
     ${revisionsHtml(a)}
     ${voiceHtml(a)}
+    ${ALLOW_DISMISS ? `<div class="card-footer">
+      <button class="dismiss-btn" data-id="${esc(a.id)}" onclick="dismissAlert(this)">Dismiss</button>
+    </div>` : ''}
   </div>`;
+}
+
+async function dismissAlert(btn) {
+  const id = btn.dataset.id;
+  if (!confirm('Hide this alert from the dashboard?')) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${APP_BASE}/api/alerts/${encodeURIComponent(id)}/dismiss`,
+                          {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+    if (!r.ok) {
+      btn.disabled = false;
+      alert(r.status === 403 ? 'Dismiss is disabled on this dashboard.'
+                             : 'Failed to dismiss alert.');
+      return;
+    }
+    // The SSE stream re-pushes the snapshot once the DB signal fires, but
+    // drop it from the local view immediately for a snappy response.
+    render(allAlerts.filter(a => a.id !== id));
+  } catch (_) {
+    btn.disabled = false;
+    alert('Failed to dismiss alert.');
+  }
 }
 
 function tickCountdowns() {
@@ -1350,6 +1402,7 @@ async function _restorePrefs(sub) {
 }
 
 const PUSH_ENABLED = __PUSH_ENABLED__;
+const ALLOW_DISMISS = __ALLOW_DISMISS__;
 
 async function initPush() {
   if (!PUSH_ENABLED) return;   // disabled via WEB_PUSH_ENABLED
@@ -1547,6 +1600,7 @@ def index():
         .replace('__SUBTITLE__', _html.escape(_resolved_subtitle()))
         .replace('__FOOTER__',   _html.escape(SITE_FOOTER))
         .replace('__PUSH_ENABLED__', 'true' if WEB_PUSH_ENABLED else 'false')
+        .replace('__ALLOW_DISMISS__', 'true' if ALLOW_DISMISS else 'false')
         .replace('__LIVE_PLAYER__', _LIVE_PLAYER_HTML if RADIO_ENABLED else '')
         .replace('__EVENT_GROUPS__', _json_for_script(_notifiable_event_groups()))
         .replace('__TEST_EEE__', _json_for_script(sorted(cfg.TEST_EEE)))
@@ -1684,7 +1738,19 @@ def status():
                   'last_success_ts': api.get('last_success_ts')},
         'sources': src,
         'map': map_meta,
+        'allow_dismiss': ALLOW_DISMISS,
     })
+
+
+def _with_areas(alert: dict) -> dict:
+    """Attach 'areas' — reverse-FIPS county listing, e.g. 'KY - Clark, Madison'
+    — for the dashboard to show after the full alert text."""
+    alert['areas'] = fips_lookup.format_grouped_cached(alert['fips']) if alert.get('fips') else ''
+    return alert
+
+
+def _alerts_json(limit=200):
+    return [_with_areas(a) for a in alertdb.get_alerts(limit)]
 
 
 @app.route('/events')
@@ -1692,7 +1758,7 @@ def events():
     @stream_with_context
     def generate():
         # Send current snapshot immediately so the page loads with data
-        yield f'data: {json.dumps(alertdb.get_alerts(200))}\n\n'
+        yield f'data: {json.dumps(_alerts_json())}\n\n'
         try:
             last_mtime = os.path.getmtime('/tmp/alerts_updated')
         except OSError:
@@ -1707,7 +1773,7 @@ def events():
                 mtime = None
             if mtime != last_mtime:
                 last_mtime = mtime
-                yield f'data: {json.dumps(alertdb.get_alerts(200))}\n\n'
+                yield f'data: {json.dumps(_alerts_json())}\n\n'
             elif tick % 15 == 0:
                 yield 'event: ping\ndata: 1\n\n'  # keep-alive (named so the client can react)
     return Response(generate(), mimetype='text/event-stream',
@@ -1716,7 +1782,7 @@ def events():
 
 @app.route('/api/alerts')
 def list_alerts():
-    return jsonify(alertdb.get_alerts(200))
+    return jsonify(_alerts_json())
 
 
 @app.route('/api/alerts/<alert_id>')
@@ -1724,7 +1790,25 @@ def get_alert(alert_id):
     alert = alertdb.get_alert(alert_id)
     if not alert:
         abort(404)
-    return jsonify(alert)
+    return jsonify(_with_areas(alert))
+
+
+@app.route('/api/alerts/<alert_id>/dismiss', methods=['POST'])
+def dismiss_alert(alert_id):
+    """Hide an alert from the dashboard (soft flag; the row is kept).
+
+    Off unless ALLOW_DISMISS is set, and unauthenticated when on — the app has
+    no login, so restrict this path at the reverse proxy. The JSON content-type
+    requirement is the same CSRF guard /api/test-alert uses.
+    """
+    if not ALLOW_DISMISS:
+        abort(403)
+    if not (request.content_type or '').startswith('application/json'):
+        abort(415)
+    if not alertdb.get_alert(alert_id):
+        abort(404)
+    alertdb.dismiss_alert(alert_id)   # idempotent: already-dismissed is still ok
+    return jsonify({'ok': True})
 
 
 def _safe_path(base, filename):

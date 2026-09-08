@@ -34,8 +34,9 @@ RADIO: rtl_fm → recorder.py → multimon-ng → tee /tmp/multimon.log → dsam
 NWWS:  nwws_client.py (slixmpp MUC, host failover) → nwws_parse.py ─────────────────────────┼→ ingest.py
 API:   api_poller.py (alerts/active; fast-poll when NWWS down; /tmp/poll_now trigger) ──────┘     │
                                               notify-once → notifier.py (Apprise) + push.py + mqtt_pub.py
-web.py (Flask 8082: SSE, Leaflet, /tiles, test-alert) ←── alerts.py (SQLite /alerts/alerts.db, WAL)
+web.py (Flask 8082: SSE, Leaflet, /tiles, test-alert, dismiss) ←── alerts.py (SQLite /alerts/alerts.db, WAL)
 map_cache.py (startup: zone GeoJSON + OSM tiles → /alerts/mapdata)   maps.py (Pillow PNG renderer)
+fips_lookup.py (offline PSSCCC → county names, scripts/data/fips_counties.json)
 ```
 
 `run.sh` is the orchestrator: runs `autosetup.py` (LOCATION → derived env),
@@ -67,6 +68,14 @@ runs the radio pipeline in the foreground when `RADIO_ENABLED=true`.
   wording — throttled by `RENOTIFY_MIN_INTERVAL_SECS` (clock: `renotified_at`).
   Otherwise a merge stays silent, except one map follow-up when geometry
   arrives after notification (`NOTIFY_MAP_FOLLOWUP`).
+- Notification bodies lead with a county line from `fips_lookup`
+  ("MI - Oakland, Wayne"), then the existing headline → `header_message` →
+  `event_name` fallback. Keep that fallback: radio rows have no headline, so
+  dropping it ships an empty push. The line is capped
+  (`MAX_COUNTIES_PER_STATE`, `MAX_TOTAL_CHARS`) because web push limits the
+  encrypted payload to about 4 KB.
+- A re-notification clears `dismissed_at`, so dismissing an alert never
+  silences a later escalation of it.
 - Radio decodes touch `/tmp/last_decode` (silence clock) and `/tmp/poll_now`
   (immediate API enrichment poll).
 
@@ -89,6 +98,20 @@ runs the radio pipeline in the foreground when `RADIO_ENABLED=true`.
 - `RADIO_SQUELCH` should stay 0 — squelch has caused missed SAME decodes.
 - Keep maps offline-capable: `maps.py` must never fetch over the network;
   only `map_cache.py` downloads (throttled, OSM policy).
+- `fips_lookup` never pads a short code: zero-filling turns `1049` into a
+  real, wrong county, and a wrong county on a warning is worse than none.
+  `scripts/data/fips_counties.json` is states+DC from the FCC list plus
+  PR/VI/GU/AS/MP taken from api.weather.gov county zones, so territory names
+  match what NWS puts in alerts. It ships in the image — the lookup must stay
+  offline, like `maps.py`.
+- Alert deletion is a soft `dismissed_at` flag, never a DELETE: `api_poller`
+  re-ingests every active alert each cycle and dedup is DB-driven, so a deleted
+  row is recreated with `notified_at` NULL and notifies again.
+- `ALLOW_DISMISS` (default false) gates the dismiss route and button. The app
+  has no login, so the deployment restricts `/api/test-alert` and the dismiss
+  path at the reverse proxy — see "Restricting management endpoints" in the
+  README. Both hostnames need the guard: `weather.borked.io/radio/` proxies to
+  the same container as `nwsalerts.borked.io`.
 - Env vars are prefix-grouped; `config.py:_RENAMED_VARS` warns about
   pre-rearchitecture names. `.env.example` is the documented contract;
   `.env` is gitignored and holds real credentials.
