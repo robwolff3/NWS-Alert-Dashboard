@@ -107,7 +107,7 @@ def format_grouped(codes, max_per_state: int = MAX_COUNTIES_PER_STATE) -> str:
 
 @lru_cache(maxsize=512)
 def format_grouped_cached(codes_json: str) -> str:
-    """format_grouped for a JSON-encoded code list — the dashboard rebuilds
+    """format_grouped for a JSON-encoded code list. The dashboard rebuilds
     this for every alert on every SSE push, and the inputs repeat."""
     return format_grouped(json.loads(codes_json))
 

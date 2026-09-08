@@ -102,14 +102,14 @@ runs the radio pipeline in the foreground when `RADIO_ENABLED=true`.
   real, wrong county, and a wrong county on a warning is worse than none.
   `scripts/data/fips_counties.json` is states+DC from the FCC list plus
   PR/VI/GU/AS/MP taken from api.weather.gov county zones, so territory names
-  match what NWS puts in alerts. It ships in the image — the lookup must stay
-  offline, like `maps.py`.
+  match what NWS puts in alerts. It ships in the image, and the lookup must
+  stay offline, like `maps.py`.
 - Alert deletion is a soft `dismissed_at` flag, never a DELETE: `api_poller`
   re-ingests every active alert each cycle and dedup is DB-driven, so a deleted
   row is recreated with `notified_at` NULL and notifies again.
 - `ALLOW_DISMISS` (default false) gates the dismiss route and button. The app
   has no login, so the deployment restricts `/api/test-alert` and the dismiss
-  path at the reverse proxy — see "Restricting management endpoints" in the
+  path at the reverse proxy; see "Restricting management endpoints" in the
   README. Both hostnames need the guard: `weather.borked.io/radio/` proxies to
   the same container as `nwsalerts.borked.io`.
 - Env vars are prefix-grouped; `config.py:_RENAMED_VARS` warns about

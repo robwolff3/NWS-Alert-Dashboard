@@ -399,7 +399,7 @@ def ingest(a: IncomingAlert) -> str:
                 if do_renotify:
                     fields['renotified_at'] = now
                     row['renotified_at'] = now
-                    # We are pushing this alert again, so un-hide it — an
+                    # We are pushing this alert again, so un-hide it: an
                     # operator's dismiss should not silence an escalation.
                     if cand.get('dismissed_at'):
                         fields['dismissed_at'] = None

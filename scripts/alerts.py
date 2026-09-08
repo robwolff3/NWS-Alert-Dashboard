@@ -224,7 +224,7 @@ def set_map_file(alert_id, map_file, map_sent=None):
 
 
 def get_alerts(limit=100, include_dismissed=False):
-    """Newest alerts first. Dismissed rows are hidden by default — they stay in
+    """Newest alerts first. Dismissed rows are hidden by default; they stay in
     the DB (and in get_alert) so a re-notification can bring them back."""
     init_db()
     where = '' if include_dismissed else 'WHERE dismissed_at IS NULL '
