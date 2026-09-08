@@ -15724,6 +15724,461 @@
    "county": "Weston County",
    "state": "WY",
    "state_name": "Wyoming"
+  },
+  "60010": {
+   "county": "Eastern",
+   "state": "AS",
+   "state_name": "American Samoa"
+  },
+  "60020": {
+   "county": "Manu'a",
+   "state": "AS",
+   "state_name": "American Samoa"
+  },
+  "60030": {
+   "county": "Rose Atoll",
+   "state": "AS",
+   "state_name": "American Samoa"
+  },
+  "60040": {
+   "county": "Swains Island",
+   "state": "AS",
+   "state_name": "American Samoa"
+  },
+  "60050": {
+   "county": "Western",
+   "state": "AS",
+   "state_name": "American Samoa"
+  },
+  "66010": {
+   "county": "Guam",
+   "state": "GU",
+   "state_name": "Guam"
+  },
+  "69085": {
+   "county": "Agrihan",
+   "state": "MP",
+   "state_name": "Northern Mariana Islands"
+  },
+  "69100": {
+   "county": "Rota",
+   "state": "MP",
+   "state_name": "Northern Mariana Islands"
+  },
+  "69110": {
+   "county": "Saipan",
+   "state": "MP",
+   "state_name": "Northern Mariana Islands"
+  },
+  "69120": {
+   "county": "Tinian",
+   "state": "MP",
+   "state_name": "Northern Mariana Islands"
+  },
+  "72001": {
+   "county": "Adjuntas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72003": {
+   "county": "Aguada",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72005": {
+   "county": "Aguadilla",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72007": {
+   "county": "Aguas Buenas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72009": {
+   "county": "Aibonito",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72011": {
+   "county": "Anasco",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72013": {
+   "county": "Arecibo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72015": {
+   "county": "Arroyo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72017": {
+   "county": "Barceloneta",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72019": {
+   "county": "Barranquitas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72021": {
+   "county": "Bayamon",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72023": {
+   "county": "Cabo Rojo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72025": {
+   "county": "Caguas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72027": {
+   "county": "Camuy",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72029": {
+   "county": "Canovanas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72031": {
+   "county": "Carolina",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72033": {
+   "county": "Catano",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72035": {
+   "county": "Cayey",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72037": {
+   "county": "Ceiba",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72039": {
+   "county": "Ciales",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72041": {
+   "county": "Cidra",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72043": {
+   "county": "Coamo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72045": {
+   "county": "Comerio",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72047": {
+   "county": "Corozal",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72049": {
+   "county": "Culebra",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72051": {
+   "county": "Dorado",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72053": {
+   "county": "Fajardo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72054": {
+   "county": "Florida",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72055": {
+   "county": "Guanica",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72057": {
+   "county": "Guayama",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72059": {
+   "county": "Guayanilla",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72061": {
+   "county": "Guaynabo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72063": {
+   "county": "Gurabo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72065": {
+   "county": "Hatillo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72067": {
+   "county": "Hormigueros",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72069": {
+   "county": "Humacao",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72071": {
+   "county": "Isabela",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72073": {
+   "county": "Jayuya",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72075": {
+   "county": "Juana Diaz",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72077": {
+   "county": "Juncos",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72079": {
+   "county": "Lajas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72081": {
+   "county": "Lares",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72083": {
+   "county": "Las Marias",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72085": {
+   "county": "Las Piedras",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72087": {
+   "county": "Loiza",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72089": {
+   "county": "Luquillo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72091": {
+   "county": "Manati",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72093": {
+   "county": "Maricao",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72095": {
+   "county": "Maunabo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72097": {
+   "county": "Mayaguez",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72099": {
+   "county": "Moca",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72101": {
+   "county": "Morovis",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72103": {
+   "county": "Naguabo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72105": {
+   "county": "Naranjito",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72107": {
+   "county": "Orocovis",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72109": {
+   "county": "Patillas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72111": {
+   "county": "Penuelas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72113": {
+   "county": "Ponce",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72115": {
+   "county": "Quebradillas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72117": {
+   "county": "Rincon",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72119": {
+   "county": "Rio Grande",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72121": {
+   "county": "Sabana Grande",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72123": {
+   "county": "Salinas",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72125": {
+   "county": "San German",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72127": {
+   "county": "San Juan",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72129": {
+   "county": "San Lorenzo",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72131": {
+   "county": "San Sebastian",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72133": {
+   "county": "Santa Isabel",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72135": {
+   "county": "Toa Alta",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72137": {
+   "county": "Toa Baja",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72139": {
+   "county": "Trujillo Alto",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72141": {
+   "county": "Utuado",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72143": {
+   "county": "Vega Alta",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72145": {
+   "county": "Vega Baja",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72147": {
+   "county": "Vieques",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72149": {
+   "county": "Villalba",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72151": {
+   "county": "Yabucoa",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "72153": {
+   "county": "Yauco",
+   "state": "PR",
+   "state_name": "Puerto Rico"
+  },
+  "78010": {
+   "county": "Saint Croix",
+   "state": "VI",
+   "state_name": "Virgin Islands"
+  },
+  "78020": {
+   "county": "Saint John",
+   "state": "VI",
+   "state_name": "Virgin Islands"
+  },
+  "78030": {
+   "county": "Saint Thomas",
+   "state": "VI",
+   "state_name": "Virgin Islands"
   }
  },
  "source": "https://transition.fcc.gov/oet/info/maps/census/fips/fips.txt"

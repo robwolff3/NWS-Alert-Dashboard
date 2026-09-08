@@ -244,7 +244,7 @@ def _areas_line(alert_row: dict) -> str:
     'KY - Clark, Fayette, Madison'. Empty string if fips is unset/unknown."""
     if not alert_row.get('fips'):
         return ''
-    return fips_lookup.format_grouped(json.loads(alert_row['fips']))
+    return fips_lookup.format_grouped_cached(alert_row['fips'])
 
 
 def _notify(alert_row: dict):

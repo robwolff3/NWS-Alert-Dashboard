@@ -1745,7 +1745,7 @@ def status():
 def _with_areas(alert: dict) -> dict:
     """Attach 'areas' — reverse-FIPS county listing, e.g. 'KY - Clark, Madison'
     — for the dashboard to show after the full alert text."""
-    alert['areas'] = fips_lookup.format_grouped(json.loads(alert['fips'])) if alert.get('fips') else ''
+    alert['areas'] = fips_lookup.format_grouped_cached(alert['fips']) if alert.get('fips') else ''
     return alert
 
 

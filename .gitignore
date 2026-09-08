@@ -1,5 +1,7 @@
 # Secrets and host-specific config
 .env
+.env.*
+!.env.example
 compose.override.yaml
 
 # Runtime data (bind mounts)

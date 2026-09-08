@@ -38,6 +38,14 @@ def _fake_push(title, body, priority, eee=''):
 ing.notifier.send = _fake_notify
 ing.pushdb.send_push = _fake_push
 
+# This suite asserts on notification *counts*, so the map paths must not add
+# any. Whether they do otherwise depends on cached map data being present
+# (/alerts/mapdata): without it a radio alert's first notification carries no
+# map, and the later-geometry follow-up fires as a second notification. Pin
+# both off so the results do not depend on the host the tests run on.
+os.environ['NOTIFY_MAP_ATTACH'] = 'false'
+os.environ['NOTIFY_MAP_FOLLOWUP'] = 'false'
+
 _PASS = 0
 _FAIL = 0
 
@@ -377,6 +385,38 @@ def test_escalation_undismisses():
     check('visible again', len(alertdb.get_alerts(10)) == 1)
     check('dismissed_at cleared', alertdb.get_alert(id1)['dismissed_at'] is None)
 
+def test_areas_line_is_bounded():
+    print('the county line stays short enough for a push payload')
+    fresh_db()
+    import fips_lookup
+    every = list(fips_lookup._load())
+    check('nationwide list is capped',
+          len(fips_lookup.format_grouped(every)) <= fips_lookup.MAX_TOTAL_CHARS + 40,
+          len(fips_lookup.format_grouped(every)))
+    check('per-state overflow is summarised',
+          '+' in fips_lookup.format_grouped(every[:120]))
+    check('short list is untouched',
+          fips_lookup.format_grouped(['026163', '026125']) == 'MI - Oakland, Wayne')
+
+
+def test_malformed_fips_is_dropped():
+    print('a malformed FIPS code yields no county rather than a wrong one')
+    import fips_lookup
+    check('4-digit code rejected', fips_lookup.format_grouped('1049') == '',
+          fips_lookup.format_grouped('1049'))
+    check('non-numeric rejected', fips_lookup.format_grouped('abcde') == '')
+    check('valid code still resolves',
+          fips_lookup.format_grouped('021049') == 'KY - Clark')
+
+
+def test_territories_resolve():
+    print('territories resolve (NWS issues alerts for PR/VI/GU/AS/MP)')
+    import fips_lookup
+    check('Puerto Rico', fips_lookup.format_grouped('072127') == 'PR - San Juan',
+          fips_lookup.format_grouped('072127'))
+    check('Virgin Islands', fips_lookup.format_grouped('078030').startswith('VI - '))
+    check('Guam', fips_lookup.format_grouped('066010') == 'GU - Guam')
+
 if __name__ == '__main__':
     for fn in [test_radio_then_api, test_api_then_radio,
                test_nwws_then_api_then_radio, test_con_extends_no_notify,
@@ -387,7 +427,8 @@ if __name__ == '__main__':
                test_renotify_off_suppresses, test_renotify_throttled,
                test_cancel_with_revision_no_renotify,
                test_notify_body_never_empty, test_dismiss_survives_reingest,
-               test_escalation_undismisses]:
+               test_escalation_undismisses, test_areas_line_is_bounded,
+               test_malformed_fips_is_dropped, test_territories_resolve]:
         fn()
     print(f'\n{_PASS} passed, {_FAIL} failed')
     sys.exit(1 if _FAIL else 0)

@@ -122,6 +122,7 @@ Everything is set with environment variables in `.env` (copy it from [`.env.exam
 | `RADAR_ENABLED` | `true` | Animated NEXRAD radar overlay on dashboard maps for precip/convective alerts. |
 | `RENOTIFY_ON_UPDATE` | `escalation` | Re-notify on in-place revisions: `off`, `escalation` (severity rise / PDS wording), or `all`. |
 | `WEB_PUSH_ENABLED` | `true` | Show the browser web-push controls in the dashboard. |
+| `ALLOW_DISMISS` | `false` | Allow hiding an alert from the dashboard. The app has no login — see [Restricting management endpoints](#restricting-management-endpoints). |
 | `SITE_TITLE` / `SITE_SUBTITLE` | auto | Dashboard heading; the subtitle auto-fills from `LOCATION` when blank. |
 
 See [`.env.example`](.env.example) for the complete, commented list — radio tuning, poll intervals, dedup window, map zoom/buffer, retention, and more.
@@ -142,9 +143,10 @@ deliberately who can reach them:
 | `POST /api/alerts/<id>/dismiss` | Hides an alert from the dashboard (soft flag; the row is kept) | off (`ALLOW_DISMISS`) |
 | `POST /push/subscribe` · `POST /push/unsubscribe` | Enrolls or removes a browser for web-push | always on |
 
-`ALLOW_DISMISS=false` keeps the dismiss route and its button out of the build
-entirely, which is the right default for a publicly reachable dashboard. The
-other two have no such switch, so gate them at the proxy.
+`ALLOW_DISMISS=false` disables the dismiss route and hides its button, which is
+the right default for a publicly reachable dashboard. It is a runtime setting,
+so changing it needs only `docker compose up -d --force-recreate`, not a
+rebuild. The other two endpoints have no such switch, so gate them at the proxy.
 
 Both routes require a JSON content-type, which forces a CORS preflight and
 blocks naive cross-site form or image POSTs — but that is a CSRF guard, not
