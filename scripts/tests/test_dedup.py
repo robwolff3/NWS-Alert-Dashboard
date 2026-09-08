@@ -26,7 +26,8 @@ PUSHES = []
 
 
 def _fake_notify(title, body, priority=3, topic='nws', attach_path=None):
-    NOTIFICATIONS.append({'title': title, 'priority': priority, 'topic': topic})
+    NOTIFICATIONS.append({'title': title, 'body': body,
+                          'priority': priority, 'topic': topic})
     return True
 
 
@@ -328,6 +329,54 @@ def test_cancel_with_revision_no_renotify():
         del os.environ['RENOTIFY_ON_UPDATE']
 
 
+def test_notify_body_never_empty():
+    print('every notification carries a body (radio has no headline)')
+    fresh_db()
+    ing.ingest(radio_tor())
+    check('one notification', len(NOTIFICATIONS) == 1)
+    body = NOTIFICATIONS[0]['body']
+    check('body is non-empty', bool(body and body.strip()), NOTIFICATIONS)
+    check('body keeps the SAME header text', 'SAME header text' in body, body)
+    check('body leads with the county line', body.startswith('MI - Wayne'), body)
+
+
+def test_dismiss_survives_reingest():
+    print('a dismissed alert stays hidden when the poller re-sees it')
+    fresh_db()
+    now = time.time()
+    id1 = ing.ingest(api_tor(ts=now))
+    check('visible before dismiss', len(alertdb.get_alerts(10)) == 1)
+
+    check('dismiss reports a change', alertdb.dismiss_alert(id1) is True)
+    check('second dismiss is a no-op', alertdb.dismiss_alert(id1) is False)
+    check('hidden from the dashboard', len(alertdb.get_alerts(10)) == 0)
+    check('row still in the DB', alertdb.get_alert(id1) is not None)
+    check('still readable with include_dismissed',
+          len(alertdb.get_alerts(10, include_dismissed=True)) == 1)
+
+    # The next poll re-ingests the same active alert: it must merge into the
+    # dismissed row rather than create a fresh, visible, re-notifying one.
+    ing.ingest(api_tor(ts=now))
+    check('no new row', len(alertdb.get_alerts(10, include_dismissed=True)) == 1)
+    check('still hidden', len(alertdb.get_alerts(10)) == 0)
+    check('no second notification', len(NOTIFICATIONS) == 1, NOTIFICATIONS)
+
+
+def test_escalation_undismisses():
+    print('an escalation un-hides a dismissed alert')
+    fresh_db()
+    now = time.time()
+    id1 = ing.ingest(api_tor(ts=now))
+    alertdb.dismiss_alert(id1)
+    check('hidden', len(alertdb.get_alerts(10)) == 0)
+
+    esc = api_tor(ts=now + 700)
+    esc.description = 'This is a PARTICULARLY DANGEROUS SITUATION. Take cover now.'
+    ing.ingest(esc)
+    check('re-notified', len(NOTIFICATIONS) == 2, NOTIFICATIONS)
+    check('visible again', len(alertdb.get_alerts(10)) == 1)
+    check('dismissed_at cleared', alertdb.get_alert(id1)['dismissed_at'] is None)
+
 if __name__ == '__main__':
     for fn in [test_radio_then_api, test_api_then_radio,
                test_nwws_then_api_then_radio, test_con_extends_no_notify,
@@ -336,7 +385,9 @@ if __name__ == '__main__':
                test_event_filter_silences, test_repeat_poll_idempotent,
                test_api_update_overwrites_and_records, test_escalation_renotifies,
                test_renotify_off_suppresses, test_renotify_throttled,
-               test_cancel_with_revision_no_renotify]:
+               test_cancel_with_revision_no_renotify,
+               test_notify_body_never_empty, test_dismiss_survives_reingest,
+               test_escalation_undismisses]:
         fn()
     print(f'\n{_PASS} passed, {_FAIL} failed')
     sys.exit(1 if _FAIL else 0)

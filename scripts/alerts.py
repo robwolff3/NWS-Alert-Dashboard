@@ -45,6 +45,7 @@ _MIGRATION_COLUMNS = [
     ('update_count', 'INTEGER DEFAULT 0'),  # number of content revisions seen
     ('renotified_at', 'REAL'),              # last re-notification (throttle clock)
     ('revisions',    'TEXT'),               # JSON array of prior-version snapshots
+    ('dismissed_at', 'REAL'),               # hidden from the dashboard by an operator
 ]
 
 
@@ -222,11 +223,14 @@ def set_map_file(alert_id, map_file, map_sent=None):
     _signal()
 
 
-def get_alerts(limit=100):
+def get_alerts(limit=100, include_dismissed=False):
+    """Newest alerts first. Dismissed rows are hidden by default — they stay in
+    the DB (and in get_alert) so a re-notification can bring them back."""
     init_db()
+    where = '' if include_dismissed else 'WHERE dismissed_at IS NULL '
     with _conn() as c:
         rows = c.execute(
-            'SELECT * FROM alerts ORDER BY alert_time DESC LIMIT ?', (limit,)
+            f'SELECT * FROM alerts {where}ORDER BY alert_time DESC LIMIT ?', (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -238,25 +242,24 @@ def get_alert(alert_id):
     return dict(row) if row else None
 
 
-def delete_alert(alert_id) -> bool:
-    """Remove an alert row (and its audio/map files). True if a row was deleted."""
+def dismiss_alert(alert_id) -> bool:
+    """Hide an alert from the dashboard. True if a row was newly dismissed.
+
+    Deliberately a soft flag, not a DELETE: api_poller re-ingests every active
+    alert each cycle and dedup is DB-driven, so a deleted row would be recreated
+    with notified_at NULL and notify a second time. Audio and map files are left
+    for cleanup() to reclaim by age.
+    """
     init_db()
     with _conn() as c:
-        row = c.execute(
-            'SELECT audio_file, map_file FROM alerts WHERE id=?', (alert_id,)
-        ).fetchone()
-        if not row:
-            return False
-        for d, f in ((AUDIO_DIR, row['audio_file']), (MAPS_DIR, row['map_file'])):
-            if f:
-                try:
-                    (Path(d) / f).unlink()
-                except OSError:
-                    pass
-        c.execute('DELETE FROM alerts WHERE id=?', (alert_id,))
+        n = c.execute(
+            'UPDATE alerts SET dismissed_at = ? WHERE id = ? AND dismissed_at IS NULL',
+            (time.time(), alert_id)
+        ).rowcount
         c.commit()
-    _signal()
-    return True
+    if n:
+        _signal()
+    return bool(n)
 
 
 def cleanup():

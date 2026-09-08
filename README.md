@@ -130,6 +130,61 @@ See [`.env.example`](.env.example) for the complete, commented list — radio tu
 
 `NOTIFY_EVENT_CODES` is an **opt-in allowlist**. Leave it blank (the default) and every event notifies; set it and only the listed event codes notify — anything else is still ingested and shown on the dashboard but stays silent. You rarely need to prune it by geography: api.weather.gov only returns alerts for the zones and county derived from your `LOCATION`, so an inland setup never receives marine or tropical alerts even with those codes left in the list. Trim it only to silence event *types* you don't want (e.g. drop the advisory-tier codes to keep just warnings). [`EVENTS.md`](EVENTS.md) lists every event code, its name, and its VTEC mapping, plus the routine informational products that are intentionally left unmapped.
 
+### Restricting management endpoints
+
+The dashboard has **no login of its own**. Everything it serves is read-only
+except three endpoints, and if you expose it beyond your LAN you should decide
+deliberately who can reach them:
+
+| Endpoint | What it does | Default |
+|---|---|---|
+| `POST /api/test-alert` | Injects a demo alert through the real pipeline — fires notifications to every configured target | always on |
+| `POST /api/alerts/<id>/dismiss` | Hides an alert from the dashboard (soft flag; the row is kept) | off (`ALLOW_DISMISS`) |
+| `POST /push/subscribe` · `POST /push/unsubscribe` | Enrolls or removes a browser for web-push | always on |
+
+`ALLOW_DISMISS=false` keeps the dismiss route and its button out of the build
+entirely, which is the right default for a publicly reachable dashboard. The
+other two have no such switch, so gate them at the proxy.
+
+Both routes require a JSON content-type, which forces a CORS preflight and
+blocks naive cross-site form or image POSTs — but that is a CSRF guard, not
+authentication. Anyone who can load the page can still call them.
+
+With nginx, restrict the paths by client address. `allow`/`deny` are evaluated
+against `$remote_addr`, which at the TLS-terminating edge is the real client,
+so this needs no header trust and cannot be spoofed:
+
+```nginx
+# Regex locations take precedence over the "location /" prefix match, so this
+# wins wherever you put it in the server block.
+location ~ ^/api/(test-alert|alerts/[^/]+/dismiss)$ {
+    allow 192.168.0.0/16;
+    allow 10.0.0.0/8;
+    allow 127.0.0.1;
+    deny  all;
+
+    proxy_pass http://nwsalertdashboard:8082;
+    include /etc/nginx/proxy_params;
+}
+```
+
+On SWAG that whole allow/deny block is one line — `include
+/config/nginx/client-allow.conf;` — and the `proxy_pass` follows the same
+`$upstream_app` / `$upstream_port` pattern as the rest of the conf.
+
+Gating the push endpoints the same way is a reasonable posture, with one
+consequence worth understanding: it means a device can only **enroll** for
+notifications while it is on your network. Delivery is unaffected — the push
+service talks to the browser directly, so a phone that subscribed at home keeps
+receiving alerts anywhere. Restrict only `subscribe` and `unsubscribe`;
+`/push/vapid-public-key` and `/push/info` are GETs the page needs in order to
+render its notification controls at all.
+
+If you would rather have one guard over everything, put the whole vhost behind
+HTTP basic auth or a forward-auth provider instead. Note that service-worker
+registration under basic auth is occasionally unreliable on iOS, so verify that
+push still subscribes after such a change.
+
 ## Architecture
 
 ```

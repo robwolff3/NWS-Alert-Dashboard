@@ -249,10 +249,11 @@ def _areas_line(alert_row: dict) -> str:
 
 def _notify(alert_row: dict):
     title = alert_row['event_name']
-    body  = alert_row.get('headline') or ''
+    body  = (alert_row.get('headline') or alert_row.get('header_message')
+             or alert_row['event_name'])
     areas = _areas_line(alert_row)
     if areas:
-        body = f'{areas}\n\n{body}' if body else areas
+        body = f'{areas}\n\n{body}'
     if alert_row.get('is_test'):
         title = f'[TEST] {title}'
 
@@ -340,6 +341,9 @@ def _renotify(row: dict, escalation: bool) -> bool:
     if row.get('is_test'):
         title = f'[TEST] {title}'
     body = row.get('headline') or row.get('header_message') or row['event_name']
+    areas = _areas_line(row)
+    if areas:
+        body = f'{areas}\n\n{body}'
     attach = None
     if config.env_bool('NOTIFY_MAP_ATTACH', True):
         map_file = _render_map(row)
@@ -395,6 +399,11 @@ def ingest(a: IncomingAlert) -> str:
                 if do_renotify:
                     fields['renotified_at'] = now
                     row['renotified_at'] = now
+                    # We are pushing this alert again, so un-hide it — an
+                    # operator's dismiss should not silence an escalation.
+                    if cand.get('dismissed_at'):
+                        fields['dismissed_at'] = None
+                        row['dismissed_at'] = None
 
             alertdb.merge_alert(conn, cand['id'], fields)
             conn.commit()
